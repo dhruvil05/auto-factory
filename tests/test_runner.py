@@ -27,7 +27,8 @@ class RunnerTest(unittest.TestCase):
             self.sb.env["FAKE_AGENT_PLAN"] = str(p)
 
     def tearDown(self):
-        self.sb.close()
+        if hasattr(self, "sb"):
+            self.sb.close()
 
     def run_factory(self, *args, check=True):
         return self.sb.script("run", *args, check=check)
@@ -124,6 +125,18 @@ class RunnerTest(unittest.TestCase):
         r = self.run_factory(check=False)
         self.assertIn("intake (fake) failed: Failed to authenticate: session expired", r.stdout)
         self.assertEqual(len(self.runs("001-thing")), 1)  # no pointless second try
+        stopped = (self.sb.jobdir("001-thing") / "runs" / "stopped.md").read_text(encoding="utf-8")
+        self.assertRegex(stopped, r"^STOPPED\nWHEN: \S+Z\nLOG: runs/001-intake\.log\n\nintake \(fake\) failed")
+
+    def test_failure_summary_finds_the_error_not_the_token_count(self):
+        import sys
+        sys.path.insert(0, str(HERE.parent / "template" / "factory"))
+        from factorylib.harness import failure_summary
+        codex_tail = ("…lots of output…\n</html>\n\nERROR: exceeded retry limit, last status: 429 Too Many Requests, request id: x\n"
+                      "tokens used\n15,807\n")
+        self.assertEqual(failure_summary(codex_tail, 1), "ERROR: exceeded retry limit, last status: 429 Too Many Requests, request id: x")
+        self.assertEqual(failure_summary("all good\nbut then it stopped\n", 1), "but then it stopped")
+        self.assertEqual(failure_summary("12,345\n", 2), "exited 2")
 
     def test_per_role_tool(self):
         self.make()

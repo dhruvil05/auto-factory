@@ -105,6 +105,24 @@ def parse_output(kind, out):
     return reply, None, None
 
 
+ERROR_LINE = re.compile(r"\b(error|failed|failure|fatal|denied|unauthori[sz]ed|forbidden|not found|invalid|refused|"
+                        r"exception|traceback|too many requests|rate limit|quota|timed? ?out|\b4\d\d\b|\b5\d\d\b)", re.I)
+NOISE_LINE = re.compile(r"^[\d,.\s]+$|^tokens used$", re.I)
+
+
+def failure_summary(out, code):
+    """The line that says why a tool failed, not whatever it printed last (often a token count)."""
+    lines = [l.strip() for l in out.strip().splitlines() if l.strip()]
+    tail = lines[-200:]
+    for line in reversed(tail):
+        if ERROR_LINE.search(line) and not line.startswith("$ "):
+            return line[:300]
+    for line in reversed(tail):
+        if not NOISE_LINE.match(line):
+            return line[:300]
+    return f"exited {code}"
+
+
 def _next_index(runs):
     with _counter_lock:
         runs.mkdir(parents=True, exist_ok=True)
@@ -135,12 +153,13 @@ def run_agent(cfg, job, role, task, model_tier, port=None, role_for_port=None):
                                           input_text=prompt if h["prompt"] == "stdin" else None)
     reply, cost, err = parse_output(h["output"], out)
     if code != 0 and not err and h["output"] == "text":
-        # A text-output tool that exits non-zero failed as a tool; its last line says why.
-        err = reply or f"exited {code}"
+        # A text-output tool that exits non-zero failed as a tool; find the line that says why.
+        err = failure_summary(out, code)
     record = {
         "role": role, "harness": name, "model": model or "(tool default)", "task": task,
         "started": started, "seconds": round(time.monotonic() - t0, 1), "exit": code,
         "timed_out": timed_out, "cost_usd": cost, "reply": reply, "error": err,
+        "log": f"runs/{stem}.log",
     }
     (runs / f"{stem}.log").write_text(f"$ {command}\n\n{out}", encoding="utf-8")
     atomic_write(runs / f"{stem}.json", json.dumps(record, indent=2) + "\n")

@@ -39,6 +39,10 @@ def say(msg):
 class Stop(Exception):
     """This job stops for this run; the reason is shown and saved in runs/stopped.md."""
 
+    def __init__(self, msg, log=None):
+        super().__init__(msg)
+        self.log = log
+
 
 def script(name, *args, stdin=None):
     res = subprocess.run([PY, str(paths.BIN / f"{name}.py"), *[str(a) for a in args]], cwd=str(paths.REPO),
@@ -112,9 +116,9 @@ def agent(job_id, role, task, tier, port_role=None):
     if rec["timed_out"]:
         raise Stop(f"{role} timed out after {cfg['runner']['agent_timeout_minutes']} minutes")
     if rec["error"]:  # the tool itself failed (sign-in, quota, bad flag): asking again won't help
-        raise Stop(f"{role} ({name}) failed: {rec['error'].strip().splitlines()[-1][:300]}")
+        raise Stop(f"{role} ({name}) failed: {harness.failure_summary(rec['error'], rec['exit'])}", log=rec.get("log"))
     if rec["exit"] != 0 and not rec["reply"]:
-        raise Stop(f"{role} ({name}) exited {rec['exit']}; see runs/ for its log")
+        raise Stop(f"{role} ({name}) exited {rec['exit']}", log=rec.get("log"))
     return rec
 
 
@@ -327,6 +331,7 @@ STEPS = {"intake": step_intake, "spec": step_spec, "implement": step_implement, 
 
 
 def drive(job_id, stopped):
+    (jdir(job_id) / "runs" / "stopped.md").unlink(missing_ok=True)  # a new attempt; an old stop no longer applies
     try:
         for _ in range(60):
             job = load(job_id)
@@ -341,7 +346,9 @@ def drive(job_id, stopped):
     except (Stop, Refused, jobs.NoJob, config.ConfigError) as e:
         stopped[job_id] = str(e)
         say(f"{job_id}: STOPPED: {e}")
-        atomic_write(jdir(job_id) / "runs" / "stopped.md", f"STOPPED\n\n{jobs.now()}\n\n{e}\n")
+        log = getattr(e, "log", None)
+        atomic_write(jdir(job_id) / "runs" / "stopped.md",
+                     f"STOPPED\nWHEN: {jobs.now()}\n" + (f"LOG: {log}\n" if log else "") + f"\n{e}\n")
     except Exception as e:  # never let one job take the run down
         stopped[job_id] = f"{type(e).__name__}: {e}"
         say(f"{job_id}: STOPPED by an error: {type(e).__name__}: {e}")

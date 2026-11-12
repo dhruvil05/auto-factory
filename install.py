@@ -20,7 +20,8 @@ HERE = Path(__file__).resolve().parent
 TEMPLATE = HERE / "template"
 IGNORE = ["/factory/jobs/", "/factory/config-history/", "/factory/archive/", "/factory/PAUSE", "/.worktrees/"]
 # Files a project tailors; --upgrade leaves them alone.
-TAILORED = ("factory/config.json", "factory/seed-users.json", ".claude/agents/", ".claude/skills/factory/")
+TAILORED = ("factory/config.json", "factory/seed-users.json", ".claude/agents/", ".claude/skills/factory/",
+            ".agents/skills/factory/")
 RUNTIME = ("factory/jobs/", "factory/config-history/", "factory/archive/", ".worktrees/")
 
 

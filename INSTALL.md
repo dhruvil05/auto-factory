@@ -8,7 +8,7 @@ asking.
 
 Stop and tell the user if any fails:
 
-- The project is a git repo whose `origin` is on GitHub, and `gh auth status`
+- The project is a gcodeit repo whose `origin` is on GitHub, and `gh auth status`
   shows an account that can push and manage labels.
 - `python --version` is 3.10 or later.
 - The default branch (`gh repo view --json defaultBranchRef`) exists on `origin`.
@@ -20,6 +20,10 @@ python "<this package>/install.py" "<project root>"
 ```
 
 If it lists files that already exist, show the user and ask before using `--upgrade`.
+
+It installs both skills: `.claude/skills/factory/` (Claude Code, `/factory`)
+and `.agents/skills/factory/` (Codex, `$factory`). Keep both even if the user
+uses one tool today.
 
 ## 3. Tailor (keep structure, first lines and one-line replies unchanged)
 

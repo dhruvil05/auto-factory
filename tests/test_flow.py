@@ -69,8 +69,13 @@ class FlowTest(unittest.TestCase):
         self.assertIn("approved, needs your merge", pr["comments"][-1])
         self.assertIn("factory:needs-human", [lb["name"] for lb in gh["issues"]["1"]["labels"]])
         self.assertIn("wait\t1\t001-add-a-status-filter\tneeds-human\tapproved; merge PR", self.sb.job("queue").stdout)
-        # feedback starts round 2
-        out = self.sb.job("feedback", job_id, stdin="Use 'medium' as the default.").stdout
+        # feedback starts round 2 (from a file, as the Codex skill passes it)
+        fb = self.sb.tmp / "feedback.txt"
+        fb.write_text("Use 'medium' as the default.", encoding="utf-8")
+        self.assertIn("no such file", self.sb.job("feedback", job_id, "--file", str(fb) + "x", check=False).stderr)
+        out = self.sb.job("feedback", job_id, "--file", str(fb)).stdout
+        self.assertIn("Use 'medium' as the default.",
+                      (self.sb.jobdir(job_id) / "feedback-1.md").read_text(encoding="utf-8"))
         self.assertIn("feedback-1.md, implement round 2", out)
         job = self.sb.jobjson(job_id)
         self.assertEqual((job["stage"], job["round"], job["held"]), ("implement", 2, False))

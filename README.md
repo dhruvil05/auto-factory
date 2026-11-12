@@ -34,7 +34,8 @@ every job to you.
 ```
 install.py                     install or upgrade the factory in a project
 template/                      what gets installed
-  .claude/skills/factory/      the /factory orchestrator
+  .claude/skills/factory/      the /factory orchestrator (Claude Code)
+  .agents/skills/factory/      the $factory skill (Codex), which drives run.py
   .claude/agents/              intake, spec-writer, implementer, approver, 6 reviewers
   factory/bin/                 job, gate, route, env, port, shot, serve, run (python …/x.py)
   factory/factorylib/          shared Python, standard library only
@@ -80,6 +81,23 @@ In the project, in Claude Code:
 /factory run 12       one issue
 /factory <anything>   ask about jobs, give feedback on one, reject one, file a feature
 ```
+
+## The `factory` skill in Claude Code and in Codex
+
+Both tools get the same commands from their own skill file:
+
+| | Claude Code | Codex |
+|---|---|---|
+| Skill file | `.claude/skills/factory/SKILL.md` | `.agents/skills/factory/SKILL.md` |
+| Type | `/factory run`, `/factory run 12`, `/factory <anything>` | `$factory run`, `$factory run 12`, `$factory <anything>` (or pick it in `/skills`) |
+| Who runs the agents | Claude Code's own subagents | `factory/bin/run.py`, started by the skill |
+
+In Codex the skill hands `run` to `run.py`, which needs network access and
+starts other agent processes, so Codex asks you to approve running it outside
+its sandbox. If your Codex session can't keep a long command running, run
+`python factory/bin/run.py` in a terminal instead; the result is the same.
+The Codex skill only runs when you name it (`allow_implicit_invocation: false`
+in its `agents/openai.yaml`), because it opens and merges pull requests.
 
 ## Use it with Codex, DeepSeek or another agent tool
 

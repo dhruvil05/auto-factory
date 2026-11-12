@@ -108,6 +108,35 @@ class ConfigTest(unittest.TestCase):
             self.assertEqual(c["env"]["local_hosts"], ["localhost", "127.0.0.1", "::1"])
 
 
+class SkillsTest(unittest.TestCase):
+    """Claude Code and Codex each get a `factory` skill; both must load."""
+
+    def frontmatter(self, path):
+        text = path.read_text(encoding="utf-8")
+        self.assertTrue(text.startswith("---\n"), path)
+        front = text.split("---", 2)[1]
+        return dict(line.split(": ", 1) for line in front.strip().splitlines())
+
+    def test_both_skills(self):
+        claude = self.frontmatter(PACKAGE / "template/.claude/skills/factory/SKILL.md")
+        codex = self.frontmatter(PACKAGE / "template/.agents/skills/factory/SKILL.md")
+        self.assertEqual(claude["name"], "factory")
+        self.assertEqual(codex["name"], "factory")
+        self.assertEqual(set(codex), {"name", "description"})
+        self.assertIn("$factory", codex["description"])
+        yaml = (PACKAGE / "template/.agents/skills/factory/agents/openai.yaml").read_text(encoding="utf-8")
+        self.assertIn("allow_implicit_invocation: false", yaml)
+
+    def test_codex_skill_names_real_commands(self):
+        text = (PACKAGE / "template/.agents/skills/factory/SKILL.md").read_text(encoding="utf-8")
+        job_doc = (FACTORY / "bin" / "job.py").read_text(encoding="utf-8").split('"""')[1]
+        for cmd in ("summary", "queue", "feedback", "reject", "pause", "unpause"):
+            self.assertIn(f"job.py {cmd}", text)
+            self.assertRegex(job_doc, rf"\n  (\w+ \| )?{cmd}\b")
+        self.assertIn("run.py doctor", text)
+        self.assertIn("--file <path>", job_doc)
+
+
 class LocalEnvTest(unittest.TestCase):
     def test_foreign_hosts(self):
         values = localenv.parse_env(

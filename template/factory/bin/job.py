@@ -11,8 +11,8 @@ Usage: python factory/bin/job.py <command> …
   header <job>             the line every agent prompt starts with
   advance <job> <stage>    move a job to <stage>, or refuse
   merge <job>              after APPROVE: hold for a human, or sync, gate and merge the PR
-  feedback <job>           needs-human → implement, with your feedback (stdin)
-  reject <job>             needs-info or needs-human → rejected, with your reason (stdin)
+  feedback <job> [--file <path>]   needs-human → implement, with your feedback (stdin or file)
+  reject <job> [--file <path>]     needs-info or needs-human → rejected, with your reason (stdin or file)
   agents <job> <json>      record the routed reviewers (route.py calls this)
   sync <job>               refresh gate, reviews and cost from the job's files
   summary [<job>…]         table of jobs
@@ -652,10 +652,13 @@ def main(argv):
             print(f"{job['id']}: {job['stage']} (round {job['round']})")
         elif cmd == "merge" and len(args) == 1:
             cmd_merge(jobs.resolve(args[0]))
-        elif cmd == "feedback" and len(args) == 1:
-            cmd_feedback(jobs.resolve(args[0]), sys.stdin.read())
-        elif cmd == "reject" and len(args) == 1:
-            cmd_reject(jobs.resolve(args[0]), sys.stdin.read())
+        elif cmd in ("feedback", "reject") and (len(args) == 1 or (len(args) == 3 and args[1] == "--file")):
+            if len(args) == 3:
+                require(Path(args[2]).is_file(), f"no such file: {args[2]}")
+                text = Path(args[2]).read_text(encoding="utf-8", errors="replace")
+            else:
+                text = sys.stdin.read()
+            (cmd_feedback if cmd == "feedback" else cmd_reject)(jobs.resolve(args[0]), text)
         elif cmd == "agents" and len(args) == 2:
             cmd_agents(sync(jobs.resolve(args[0])), args[1])
         elif cmd == "sync" and len(args) == 1:

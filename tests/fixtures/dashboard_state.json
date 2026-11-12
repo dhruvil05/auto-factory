@@ -1,0 +1,300 @@
+{
+  "project": {"name": "backoffice-app", "repo": "C:/work/backoffice-app", "base_branch": "main"},
+  "paused": false,
+  "config_dirty": true,
+  "slots": {"used": 3, "total": 3},
+  "preflight": {
+    "gate": "PASS",
+    "commit": "9f2c1e7a4b03d5e6f7a8b9c0d1e2f3a4b5c6d7e8",
+    "at": "2026-11-12T10:42:00Z",
+    "steps": [
+      {"name": "lint", "result": "PASS", "seconds": 8},
+      {"name": "tests", "result": "PASS", "seconds": 99}
+    ],
+    "rules": [
+      {"name": "protected paths", "result": "PASS"},
+      {"name": "secret scan", "result": "PASS: clean"},
+      {"name": "local-only env", "result": "PASS"}
+    ]
+  },
+  "config": {
+    "version": 1,
+    "base_branch": "main",
+    "merge_method": "squash",
+    "shell": "system",
+    "concurrency": 3,
+    "max_rounds": 3,
+    "labels": {"queue": "factory", "needs_info": "factory:needs-info", "needs_human": "factory:needs-human"},
+    "models": {"intake": "fable", "spec-writer": "opus", "implementer": "opus", "approver": "opus"},
+    "routing": {
+      "low": {"code": "haiku", "auto_merge": false},
+      "medium": {"code": "sonnet", "auto_merge": false},
+      "high": {"code": "sonnet", "auto_merge": false}
+    },
+    "surface_reviewers": {
+      "ui": {"ux": "sonnet", "ui": "haiku"},
+      "security": {"security": "opus"},
+      "data": {"data": "opus"},
+      "access": {"access": "opus"},
+      "integration": {"security": "opus"}
+    },
+    "always_human_surfaces": ["data", "access", "integration"],
+    "checks": [
+      {"name": "lint", "cmd": "npm run lint", "enabled": true, "timeout": 300, "retry_on_fail": 0},
+      {"name": "tests", "cmd": "npm test -- --run", "enabled": true, "timeout": 900, "retry_on_fail": 1},
+      {"name": "migrate", "cmd": "npm run migrate:check -- --db {DB}", "enabled": false, "timeout": 300, "retry_on_fail": 0}
+    ],
+    "checks_none_ok": false,
+    "env": {
+      "template": ".env.factory",
+      "db_name": "{project}_job_{n}",
+      "db_create": "createdb {DB}",
+      "db_drop": "dropdb --if-exists {DB}",
+      "migrate": "npm run migrate",
+      "seed": "npm run seed:factory",
+      "dev_server": "npm run dev -- --port {PORT}",
+      "login_path": "",
+      "local_hosts": ["localhost", "127.0.0.1", "::1"]
+    },
+    "ports": {"base": 5100, "step": 10},
+    "protected_paths": ["factory/*", ".claude/*", ".github/workflows/*"],
+    "diff_budget": {
+      "low": {"lines": 300, "files": 10},
+      "medium": {"lines": 800, "files": 25},
+      "high": {"lines": 1500, "files": 40}
+    },
+    "cost_caps_usd": {"job": 5, "run": null},
+    "prices_usd_per_mtok": {
+      "claude-opus-4-1": {"input": 15, "output": 75, "cache_write_5m": 18.75, "cache_write_1h": 30, "cache_read": 1.5}
+    }
+  },
+  "jobs": [
+    {
+      "id": "049-rename-clients-to-customers", "issue": 49, "title": "Rename “Clients” to “Customers” in the side menu",
+      "issue_url": "https://github.com/example-org/backoffice-app/issues/49",
+      "pr": null, "pr_url": null,
+      "branch": "factory/049-rename-clients-to-customers", "worktree": "C:/work/backoffice-app/.worktrees/049-rename-clients-to-customers",
+      "stage": "spec", "round": 0, "round_limit": 3,
+      "intake": {"decision": "ACCEPT", "risk": "low", "surfaces": ["ui"], "rescoped": false},
+      "agents": {"reviewers": {"code": "haiku", "ux": "sonnet", "ui": "haiku"}},
+      "auto_merge": false, "always_human": false, "held": false,
+      "gate": null, "reviews": {},
+      "port": 5590, "db": "backoffice_app_job_49",
+      "cost": {"usd": 0.30, "by_agent": {"intake": 0.18, "spec-writer": 0.12}, "partial": false},
+      "started": "2026-11-12T10:44:00Z", "ended": null,
+      "history": [{"at": "2026-11-12T10:47:10Z", "from": "intake", "to": "spec"}]
+    },
+    {
+      "id": "044-export-invoices-as-csv", "issue": 44, "title": "Export invoices as CSV from the Invoices list",
+      "issue_url": "https://github.com/example-org/backoffice-app/issues/44",
+      "pr": 56, "pr_url": "https://github.com/example-org/backoffice-app/pull/56",
+      "branch": "factory/044-export-invoices-as-csv", "worktree": "C:/work/backoffice-app/.worktrees/044-export-invoices-as-csv",
+      "stage": "implement", "round": 2, "round_limit": 3,
+      "intake": {"decision": "ACCEPT", "risk": "medium", "surfaces": [], "rescoped": false},
+      "agents": {"reviewers": {"code": "sonnet"}},
+      "auto_merge": false, "always_human": false, "held": false,
+      "gate": "FAIL", "reviews": {},
+      "port": 5540, "db": "backoffice_app_job_44",
+      "cost": {"usd": 0.96, "by_agent": {"intake": 0.19, "spec-writer": 0.22, "implementer": 0.55}, "partial": false},
+      "started": "2026-11-12T10:16:00Z", "ended": null,
+      "history": [
+        {"at": "2026-11-12T10:18:30Z", "from": "intake", "to": "spec"},
+        {"at": "2026-11-12T10:22:40Z", "from": "spec", "to": "implement"},
+        {"at": "2026-11-12T10:39:05Z", "from": "implement", "to": "gate"},
+        {"at": "2026-11-12T10:41:10Z", "from": "gate", "to": "implement"}
+      ]
+    },
+    {
+      "id": "041-add-a-status-filter", "issue": 41, "title": "Add a status filter to the Orders list",
+      "issue_url": "https://github.com/example-org/backoffice-app/issues/41",
+      "pr": 52, "pr_url": "https://github.com/example-org/backoffice-app/pull/52",
+      "branch": "factory/041-add-a-status-filter", "worktree": "C:/work/backoffice-app/.worktrees/041-add-a-status-filter",
+      "stage": "review", "round": 1, "round_limit": 3,
+      "intake": {"decision": "ACCEPT", "risk": "medium", "surfaces": ["ui"], "rescoped": false},
+      "agents": {"reviewers": {"code": "sonnet", "ux": "sonnet", "ui": "haiku"}},
+      "auto_merge": false, "always_human": false, "held": false,
+      "gate": "PASS", "reviews": {"code": "PASS", "ui": "PASS"},
+      "port": 5510, "db": "backoffice_app_job_41",
+      "cost": {"usd": 0.84, "by_agent": {"intake": 0.17, "spec-writer": 0.2, "implementer": 0.38, "reviewer-code": 0.06, "reviewer-ui": 0.03}, "partial": false},
+      "started": "2026-11-12T10:32:00Z", "ended": null,
+      "history": [
+        {"at": "2026-11-12T10:33:40Z", "from": "intake", "to": "spec"},
+        {"at": "2026-11-12T10:36:20Z", "from": "spec", "to": "implement"},
+        {"at": "2026-11-12T10:44:50Z", "from": "implement", "to": "gate"},
+        {"at": "2026-11-12T10:46:30Z", "from": "gate", "to": "review"}
+      ]
+    },
+    {
+      "id": "045-add-a-priority-column", "issue": 45, "title": "Add a priority column to orders",
+      "issue_url": "https://github.com/example-org/backoffice-app/issues/45",
+      "pr": 58, "pr_url": "https://github.com/example-org/backoffice-app/pull/58",
+      "branch": "factory/045-add-a-priority-column", "worktree": "C:/work/backoffice-app/.worktrees/045-add-a-priority-column",
+      "stage": "needs-human", "round": 1, "round_limit": 3,
+      "intake": {"decision": "ACCEPT", "risk": "high", "surfaces": ["data"], "rescoped": false},
+      "agents": {"reviewers": {"code": "sonnet", "data": "opus"}},
+      "auto_merge": false, "always_human": true, "held": true,
+      "gate": "PASS", "reviews": {"code": "PASS", "data": "PASS"},
+      "port": 5550, "db": "backoffice_app_job_45",
+      "cost": {"usd": 1.38, "by_agent": {"intake": 0.21, "spec-writer": 0.24, "implementer": 0.61, "reviewer-code": 0.08, "reviewer-data": 0.19, "approver": 0.05}, "partial": false},
+      "started": "2026-11-12T09:52:00Z", "ended": null,
+      "history": [
+        {"at": "2026-11-12T09:54:00Z", "from": "intake", "to": "spec"},
+        {"at": "2026-11-12T09:58:00Z", "from": "spec", "to": "implement"},
+        {"at": "2026-11-12T10:29:00Z", "from": "implement", "to": "gate"},
+        {"at": "2026-11-12T10:30:57Z", "from": "gate", "to": "review"},
+        {"at": "2026-11-12T10:37:00Z", "from": "review", "to": "approve"},
+        {"at": "2026-11-12T10:39:00Z", "from": "approve", "to": "needs-human"}
+      ]
+    },
+    {
+      "id": "038-let-viewers-delete-customers", "issue": 38, "title": "Let viewers delete customers",
+      "issue_url": "https://github.com/example-org/backoffice-app/issues/38",
+      "pr": 55, "pr_url": "https://github.com/example-org/backoffice-app/pull/55",
+      "branch": "factory/038-let-viewers-delete-customers", "worktree": "C:/work/backoffice-app/.worktrees/038-let-viewers-delete-customers",
+      "stage": "needs-human", "round": 2, "round_limit": 3,
+      "intake": {"decision": "ACCEPT", "risk": "high", "surfaces": ["access"], "rescoped": false},
+      "agents": {"reviewers": {"code": "sonnet", "access": "opus"}},
+      "auto_merge": false, "always_human": true, "held": false,
+      "gate": "PASS", "reviews": {"code": "PASS", "access": "PASS"},
+      "port": 5480, "db": "backoffice_app_job_38",
+      "cost": {"usd": 1.02, "by_agent": {"intake": 0.2, "spec-writer": 0.15, "implementer": 0.4, "reviewer-code": 0.07, "reviewer-access": 0.15, "approver": 0.05}, "partial": false},
+      "started": "2026-11-12T09:30:00Z", "ended": null,
+      "history": [
+        {"at": "2026-11-12T09:31:50Z", "from": "intake", "to": "spec"},
+        {"at": "2026-11-12T09:35:00Z", "from": "spec", "to": "implement"},
+        {"at": "2026-11-12T09:50:00Z", "from": "implement", "to": "gate"},
+        {"at": "2026-11-12T09:51:40Z", "from": "gate", "to": "review"},
+        {"at": "2026-11-12T09:57:00Z", "from": "review", "to": "implement"},
+        {"at": "2026-11-12T10:20:00Z", "from": "implement", "to": "gate"},
+        {"at": "2026-11-12T10:21:30Z", "from": "gate", "to": "review"},
+        {"at": "2026-11-12T10:36:00Z", "from": "review", "to": "approve"},
+        {"at": "2026-11-12T10:40:00Z", "from": "approve", "to": "needs-human"}
+      ]
+    },
+    {
+      "id": "047-make-the-reports-better", "issue": 47, "title": "Make the reports better",
+      "issue_url": "https://github.com/example-org/backoffice-app/issues/47",
+      "pr": null, "pr_url": null, "branch": null, "worktree": null,
+      "stage": "needs-info", "round": 0, "round_limit": 3,
+      "intake": {"decision": "NEEDS-INFO", "risk": null, "surfaces": [], "rescoped": false},
+      "agents": {}, "auto_merge": null, "always_human": false, "held": false,
+      "gate": null, "reviews": {},
+      "port": null, "db": null,
+      "cost": {"usd": 0.12, "by_agent": {"intake": 0.12}, "partial": false},
+      "started": "2026-11-11T15:05:00Z", "ended": null,
+      "history": [{"at": "2026-11-11T15:06:20Z", "from": "intake", "to": "needs-info"}]
+    },
+    {
+      "id": "039-show-last-login-on", "issue": 39, "title": "Show last login on the Users page",
+      "issue_url": "https://github.com/example-org/backoffice-app/issues/39",
+      "pr": 50, "pr_url": "https://github.com/example-org/backoffice-app/pull/50",
+      "branch": "factory/039-show-last-login-on", "worktree": null,
+      "stage": "merged", "round": 1, "round_limit": 3,
+      "intake": {"decision": "ACCEPT", "risk": "low", "surfaces": ["ui"], "rescoped": false},
+      "agents": {"reviewers": {"code": "haiku", "ux": "sonnet", "ui": "haiku"}},
+      "auto_merge": false, "always_human": false, "held": false,
+      "gate": "PASS", "reviews": {"code": "PASS", "ux": "PASS", "ui": "PASS"},
+      "port": 5490, "db": null,
+      "cost": {"usd": 0.31, "by_agent": {"intake": 0.06, "spec-writer": 0.05, "implementer": 0.13, "reviewer-code": 0.01, "reviewer-ux": 0.03, "reviewer-ui": 0.01, "approver": 0.02}, "partial": false},
+      "started": "2026-11-11T13:00:00Z", "ended": "2026-11-11T13:12:00Z",
+      "history": [{"at": "2026-11-11T13:12:00Z", "from": "needs-human", "to": "merged"}]
+    },
+    {
+      "id": "033-add-pagination-to-the", "issue": 33, "title": "Add pagination to the Payments list",
+      "issue_url": "https://github.com/example-org/backoffice-app/issues/33",
+      "pr": 46, "pr_url": "https://github.com/example-org/backoffice-app/pull/46",
+      "branch": "factory/033-add-pagination-to-the", "worktree": null,
+      "stage": "merged", "round": 2, "round_limit": 3,
+      "intake": {"decision": "ACCEPT", "risk": "medium", "surfaces": [], "rescoped": false},
+      "agents": {"reviewers": {"code": "sonnet"}},
+      "auto_merge": false, "always_human": false, "held": false,
+      "gate": "PASS", "reviews": {"code": "PASS"},
+      "port": 5430, "db": null,
+      "cost": {"usd": 1.12, "by_agent": {"intake": 0.18, "spec-writer": 0.2, "implementer": 0.62, "reviewer-code": 0.08, "approver": 0.04}, "partial": false},
+      "started": "2026-11-10T09:00:00Z", "ended": "2026-11-10T09:41:00Z",
+      "history": [{"at": "2026-11-10T09:41:00Z", "from": "needs-human", "to": "merged"}]
+    },
+    {
+      "id": "036-turn-off-the-audit", "issue": 36, "title": "Turn off the audit log to speed up imports",
+      "issue_url": "https://github.com/example-org/backoffice-app/issues/36",
+      "pr": null, "pr_url": null, "branch": null, "worktree": null,
+      "stage": "rejected", "round": 0, "round_limit": 3,
+      "intake": {"decision": "REJECT", "risk": "high", "surfaces": ["access"], "rescoped": false},
+      "agents": {}, "auto_merge": null, "always_human": false, "held": false,
+      "gate": null, "reviews": {},
+      "port": null, "db": null,
+      "cost": {"usd": 0.05, "by_agent": {"intake": 0.05}, "partial": false},
+      "started": "2026-11-10T08:00:00Z", "ended": "2026-11-10T08:01:00Z",
+      "history": [{"at": "2026-11-10T08:01:00Z", "from": "intake", "to": "rejected"}]
+    }
+  ],
+  "_dev": {
+    "note": "Not part of /api/state. Used only by index.html?fixture=<path> to fake the job, file, history and diff endpoints.",
+    "history": [
+      {"name": "2026-11-12T10-39-04Z.json", "at": "2026-11-12T10:39:04Z"},
+      {"name": "2026-11-11T16-02-51Z.json", "at": "2026-11-11T16:02:51Z"}
+    ],
+    "diff": "diff --git a/factory/config.json b/factory/config.json\nindex 3b1c2d4..8e9f0a1 100644\n--- a/factory/config.json\n+++ b/factory/config.json\n@@ -2,7 +2,7 @@\n   \"base_branch\": \"main\",\n   \"merge_method\": \"squash\",\n   \"shell\": \"system\",\n-  \"concurrency\": 2,\n+  \"concurrency\": 3,\n   \"max_rounds\": 3,\n",
+    "files": {
+      "045-add-a-priority-column": [
+        {"path": "issue.md", "first_line": "> Add a priority column to orders", "summary": [], "size": 612},
+        {"path": "intake.md", "first_line": "DECISION: ACCEPT", "summary": [
+          "Clear request: orders need a priority (low, normal, high) that staff can see and filter by",
+          "Fits the Orders module and lands as one PR: migration, list column, filter",
+          "Risk high because it changes the orders table; surface: data"
+        ], "size": 1840},
+        {"path": "spec.md", "first_line": "# Add a priority column to orders", "summary": [
+          "Nullable column, backfill existing orders, then make it required",
+          "Orders list shows a Priority column with a filter",
+          "Assumption: existing orders get “normal”"
+        ], "size": 4210},
+        {"path": "impl.md", "first_line": "STATUS: READY", "summary": [
+          "4 commits on factory/045-add-a-priority-column, draft PR #58 opened",
+          "Every acceptance criterion has evidence, including a screenshot signed in as the seeded admin",
+          "New tests for the filter and the backfill"
+        ], "size": 3988},
+        {"path": "round-1/checks.md", "first_line": "GATE: PASS", "summary": [
+          "Ran the check steps set in Settings, in the job worktree, against backoffice_app_job_45",
+          "Diff 214 lines in 7 files (budget for high risk: 1500 lines, 40 files)"
+        ], "size": 702},
+        {"path": "round-1/checks.log", "first_line": "== lint ==", "summary": [], "size": 18233},
+        {"path": "round-1/review-code.md", "first_line": "VERDICT: PASS", "summary": [
+          "Reuses the existing list filter component",
+          "No N+1 queries on the Orders list"
+        ], "size": 1320},
+        {"path": "round-1/review-data.md", "first_line": "VERDICT: PASS", "summary": [
+          "Migration is reversible",
+          "Note: the backfill is a single statement, fine at current table size"
+        ], "size": 1544},
+        {"path": "round-1/shots/orders-list-admin.png", "first_line": "", "summary": [], "size": 84210},
+        {"path": "decision.md", "first_line": "APPROVE", "summary": [
+          "All 6 criteria met; spot-checked the filter on the list page",
+          "Would merge, but database changes need a human merge"
+        ], "size": 1102}
+      ],
+      "038-let-viewers-delete-customers": [
+        {"path": "intake.md", "first_line": "DECISION: ACCEPT", "summary": ["Viewers should be able to delete customers", "Permission change: surface access, risk high"], "size": 1500},
+        {"path": "spec.md", "first_line": "# Let viewers delete customers", "summary": ["Role matrix: viewer gains delete on customers", "Every delete writes an audit-log entry"], "size": 3300},
+        {"path": "impl.md", "first_line": "STATUS: READY", "summary": ["Round 2: soft delete instead of hard delete, as the access reviewer asked"], "size": 4100},
+        {"path": "round-1/checks.md", "first_line": "GATE: PASS", "summary": ["All steps passed"], "size": 640},
+        {"path": "round-1/review-code.md", "first_line": "VERDICT: PASS", "summary": ["Small, focused change"], "size": 900},
+        {"path": "round-1/review-access.md", "first_line": "VERDICT: CHANGES", "summary": ["Hard delete loses the audit trail; use soft delete"], "size": 1200},
+        {"path": "round-2/checks.md", "first_line": "GATE: PASS", "summary": ["All steps passed; tests passed on retry"], "size": 660},
+        {"path": "round-2/review-code.md", "first_line": "VERDICT: PASS", "summary": ["Soft delete is consistent with the Users module"], "size": 880},
+        {"path": "round-2/review-access.md", "first_line": "VERDICT: PASS", "summary": ["Audit entry is written for every delete"], "size": 1010},
+        {"path": "decision.md", "first_line": "ESCALATE", "summary": ["Criteria met, but this widens what viewers can do", "Needs a product decision, not a code fix"], "size": 1180}
+      ]
+    },
+    "contents": {
+      "045-add-a-priority-column": {
+        "round-1/checks.md": "GATE: PASS\nCOMMIT: 4c1d9e2\n\n## Summary\n- Ran the check steps set in Settings, in the job worktree, against backoffice_app_job_45\n- Diff 214 lines in 7 files (budget for high risk: 1500 lines, 40 files)\n\n## Steps\n| Step | Result | Time |\n|---|---|---|\n| lint | PASS | 9s |\n| tests | PASS | 1m 42s |\n\n## Built-in rules\n| Rule | Result |\n|---|---|\n| protected paths | PASS: none changed |\n| diff budget | PASS: 214 lines, 7 files (high: 1500, 40) |\n| secret scan | PASS: clean |\n| local-only env | PASS |\n",
+        "decision.md": "APPROVE\n\n## Summary\n- All 6 criteria met; spot-checked the filter on the list page\n- Would merge, but database changes need a human merge\n\n## Why\nEverything in the spec is done and both reviewers passed.\n\n## Acceptance criteria\n- [x] 1. Orders have a priority\n"
+      },
+      "038-let-viewers-delete-customers": {
+        "round-1/checks.md": "GATE: PASS\nCOMMIT: 1a2b3c4\n\n## Summary\n- All steps passed\n\n## Steps\n| Step | Result | Time |\n|---|---|---|\n| lint | PASS | 8s |\n| tests | PASS | 1m 31s |\n\n## Built-in rules\n| Rule | Result |\n|---|---|\n| protected paths | PASS: none changed |\n| diff budget | PASS: 120 lines, 5 files (high: 1500, 40) |\n| secret scan | PASS: clean |\n| local-only env | PASS |\n",
+        "round-2/checks.md": "GATE: PASS\nCOMMIT: 5d6e7f8\n\n## Summary\n- All steps passed; tests passed on retry\n\n## Steps\n| Step | Result | Time |\n|---|---|---|\n| lint | PASS | 8s |\n| tests | PASS (FLAKY: passed on retry) | 3m 02s |\n\n## Built-in rules\n| Rule | Result |\n|---|---|\n| protected paths | PASS: none changed |\n| diff budget | PASS: 168 lines, 6 files (high: 1500, 40) |\n| secret scan | PASS: clean |\n| local-only env | PASS |\n",
+        "decision.md": "ESCALATE\n\n## Summary\n- Criteria met, but this widens what viewers can do\n- Needs a product decision, not a code fix\n\n## Why\nThe change is correct and audited, but it is a permission change.\n\n## For the human\nShould viewers really delete customers, or only archive them?\nReply with feedback (e.g. \"archive only\") or reject the job.\n"
+      }
+    }
+  }
+}

@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# auto-factory runtime state (appears if the factory or its dashboard runs from
+# this folder, e.g. `python template/factory/bin/serve.py`)
+**/factory/jobs/
+**/factory/config-history/
+**/factory/archive/
+**/factory/PAUSE
+.worktrees/
+*.tmp
+
+# Local env and editor/OS files
+.env
+.venv/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

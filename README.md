@@ -1,6 +1,7 @@
 # auto-factory
 
-An issue-driven software factory for backoffice projects, run by Claude Code.
+An issue-driven software factory for backoffice projects, run by Claude Code
+or any other agent CLI (Codex, DeepSeek, …).
 Label a GitHub issue `factory`, run `/factory run`, and agents decide whether
 it's worth building, write a spec, implement it on its own branch, pass it
 through your checks, review it, and open a pull request. The approver merges
@@ -35,7 +36,7 @@ install.py                     install or upgrade the factory in a project
 template/                      what gets installed
   .claude/skills/factory/      the /factory orchestrator
   .claude/agents/              intake, spec-writer, implementer, approver, 6 reviewers
-  factory/bin/                 job, gate, route, env, port, shot, serve (python …/x.py)
+  factory/bin/                 job, gate, route, env, port, shot, serve, run (python …/x.py)
   factory/factorylib/          shared Python, standard library only
   factory/dashboard/           the dashboard page (served by serve.py)
   factory/config.json          defaults; edited from the dashboard afterwards
@@ -80,7 +81,41 @@ In the project, in Claude Code:
 /factory <anything>   ask about jobs, give feedback on one, reject one, file a feature
 ```
 
-Dashboard (board, job files, settings):
+## Use it with Codex, DeepSeek or another agent tool
+
+The factory doesn't need Claude Code. `run.py` is a script version of the
+`/factory` orchestrator that starts every agent through a command you choose:
+
+```bash
+python factory/bin/run.py doctor    # check settings and that the tools are installed
+python factory/bin/run.py           # every open `factory` issue
+python factory/bin/run.py 12        # one issue
+```
+
+Pick the tool in the dashboard (Settings → Agent tools) or in `config.json`
+under `runner`: one default tool for every role, and optionally a different
+tool per role (say Codex implements, Claude reviews). Presets ship for:
+
+| Tool | Status |
+|---|---|
+| Claude Code (`claude -p`) | checked against Claude Code 2.1.286; records cost per agent |
+| Codex (`codex exec`) | preset, **not verified here**: compare with `codex exec --help` and set model names |
+| DeepSeek (`deepseek exec`) | preset, **not verified here**: DeepSeek's terminal agents differ; set the real command |
+
+Any other CLI works if it can run non-interactively, read a prompt from stdin
+or a file, use a shell and edit files in the working folder. The agents'
+instructions stay in `.claude/agents/*.md` for every tool. The runner adds a
+short tool-neutral preamble, runs the gate's dry run after the implementer,
+pushes and opens the PR itself when a sandbox blocks the network, and
+reverts code changes made by agents that should only read.
+
+Give each tool the permissions its role needs and no more. The implementer
+edits and commits in its worktree; everyone else writes one file in the job
+folder. All agents run from the project root.
+
+## Dashboard
+
+Board, job files and settings:
 
 ```bash
 python factory/bin/serve.py

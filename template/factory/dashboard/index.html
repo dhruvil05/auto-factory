@@ -170,6 +170,11 @@ details[open]>summary{margin-bottom:8px}
 .msg{font-size:13px}
 .msg.err{color:var(--red)}
 .msg.ok{color:#17643D}
+#jd-runner:empty{display:none}
+.runstop{border-color:#F3C7C2;background:#FFFBFA;gap:10px}
+.note-info{background:var(--accent-bg);border:1px solid #C9D5F5;border-radius:10px;padding:12px 16px;font-size:14px;line-height:21px;color:var(--accent-ink);display:flex;flex-direction:column;gap:4px}
+.note-info p{margin:0}
+.note-info code{font-size:.92em;background:#fff;border-radius:6px;padding:1px 6px}
 .facts{margin:0}
 .facts dt{font-size:12px;color:var(--mute)}
 .facts dd{margin:2px 0 12px;font-size:13px;overflow-wrap:anywhere}
@@ -285,6 +290,7 @@ var SECTIONS = [
   { key: 'checks', name: 'Check steps' },
   { key: 'environment', name: 'Job environment' },
   { key: 'routing', name: 'Reviewers and routing' },
+  { key: 'runner', name: 'Agent tools' },
   { key: 'limits', name: 'Limits and budgets' },
   { key: 'protected', name: 'Protected paths' },
   { key: 'run', name: 'Run control' },
@@ -419,6 +425,12 @@ function setPath(o, path, v) {
     cur = cur[k];
   }
   cur[ks[ks.length - 1]] = v;
+}
+
+function delPath(o, path) {
+  var ks = path.split('.'), parent = getPath(o, ks.slice(0, -1).join('.'));
+  if (ks.length === 1) parent = o;
+  if (parent && typeof parent === 'object') delete parent[ks[ks.length - 1]];
 }
 
 function storeGet(k) { try { return window.sessionStorage.getItem(k); } catch (e) { return null; } }
@@ -897,6 +909,7 @@ function jobLayoutHTML() {
   return '<main class="wrap stack" style="gap:20px">' +
     '<nav class="crumbs" aria-label="Breadcrumb" id="jd-crumbs"><a href="#/board">Board</a></nav>' +
     '<div id="jd-head"><p class="mute" role="status">Loading the job…</p></div>' +
+    '<div id="jd-runner" class="stack" style="gap:12px"></div>' +
     '<div class="cols" id="jd-cols" hidden>' +
       '<section aria-labelledby="h-steps" class="col-main"><h2 id="h-steps">What happened</h2><div id="jd-steps"></div></section>' +
       '<aside class="col-side" aria-label="Job details"><div id="jd-decision"></div>' +
@@ -956,6 +969,42 @@ function renderJobParts() {
   });
   hydrateChecks(steps);
   hydrateForHuman(j, data.files);
+  hydrateRunner(data.files);
+}
+
+/* runs/stopped.md and runs/warnings.md, written by factory/bin/run.py, shown above the steps */
+function hydrateRunner(files) {
+  var el = $('jd-runner');
+  if (!el) return;
+  var fs = arr(files).filter(function (f) { return f && typeof f.path === 'string'; });
+  function find(n) { return fs.filter(function (f) { return f.path.replace(/\\/g, '/').replace(/^\.\//, '') === n; })[0]; }
+  var st = find('runs/stopped.md'), wn = find('runs/warnings.md');
+  function body(f) {
+    var c = app.fileCache[cacheKey(f.path, f.size)];
+    if (c === undefined) return '<p class="small mute" style="margin:0">Loading…</p>';
+    if (c === null) return '<p class="small mute" style="margin:0">Could not load ' + esc(f.path) + '.</p>';
+    var t = c.trim();
+    if (t.length > 4000) t = t.slice(0, 4000) + '\n…';
+    return t ? '<div class="prewrap" style="font-size:13px;line-height:19px">' + esc(t) + '</div>' : '<p class="small mute" style="margin:0">(empty file)</p>';
+  }
+  function paint() {
+    var h = '';
+    if (st) {
+      h += '<section class="card runstop" aria-labelledby="h-runstop"><div class="row wrapflex" style="gap:8px">' +
+        '<h2 id="h-runstop" style="font-size:15px">' + chip('Stopped by the runner', 'fail', 'big') + '</h2><span class="grow"></span>' +
+        fileLink({ path: st.path, p: 'runs/stopped.md' }) + '</div>' + body(st) + '</section>';
+    }
+    if (wn) {
+      h += '<section class="decide" style="gap:8px" aria-labelledby="h-runwarn"><div class="row wrapflex" style="gap:8px">' +
+        '<h2 id="h-runwarn" style="font-size:15px">' + chip('Runner warnings', 'warn') + '</h2><span class="grow"></span>' +
+        fileLink({ path: wn.path, p: 'runs/warnings.md' }) + '</div>' + body(wn) + '</section>';
+    }
+    withFocus(function () { setHTML(el, h); });
+  }
+  paint();
+  [st, wn].forEach(function (f) {
+    if (f && app.fileCache[cacheKey(f.path, f.size)] === undefined) fetchContent(f.path, f.size).then(paint);
+  });
 }
 
 function jobHeadHTML(j) {
@@ -1470,6 +1519,7 @@ function sectionHTML(sec) {
   switch (sec) {
     case 'environment': return envSection();
     case 'routing': return routingSection();
+    case 'runner': return runnerSection();
     case 'limits': return limitsSection();
     case 'protected': return protectedSection();
     case 'run': return runSection();
@@ -1489,7 +1539,8 @@ function textField(path, label, help, opts) {
   var v = getPath(app.draft, path), id = fieldId(path);
   var val = opts.type === 'list' ? arr(v).join(', ') : (v === null || v === undefined ? '' : v);
   var hid = help ? id + '-help' : '';
-  return '<div class="fld' + (opts.full ? ' full' : '') + '"><label class="lbl" for="' + id + '">' + esc(label) + '</label>' +
+  return '<div class="fld' + (opts.full ? ' full' : '') + '"><label class="lbl" for="' + id + '">' +
+    (opts.srPrefix ? '<span class="visually-hidden">' + esc(opts.srPrefix) + ' </span>' : '') + esc(label) + '</label>' +
     '<input id="' + id + '" class="field' + (opts.mono ? ' mono' : '') + '" type="' + (opts.input || 'text') + '"' +
     (opts.min !== undefined ? ' min="' + opts.min + '"' : '') + (opts.max !== undefined ? ' max="' + opts.max + '"' : '') +
     (opts.step !== undefined ? ' step="' + opts.step + '"' : '') +
@@ -1748,6 +1799,121 @@ function routingSection() {
   return h;
 }
 
+/* --- agent tools (runner) --- */
+
+var DEFAULT_RUNNER = {
+  harness: 'claude',
+  role_harness: {},
+  agent_timeout_minutes: 60,
+  harnesses: {
+    claude: { cmd: 'claude -p {MODEL_FLAG} --permission-mode dontAsk --allowedTools "{TOOLS}" --output-format json', prompt: 'stdin', output: 'claude-json', model_flag: '--model {MODEL}', models: { fable: 'fable', opus: 'opus', sonnet: 'sonnet', haiku: 'haiku' }, verified: true },
+    codex: { cmd: 'codex exec {MODEL_FLAG} --sandbox workspace-write --skip-git-repo-check "Read the file {PROMPT_FILE} and follow its instructions exactly."', prompt: 'file', output: 'text', model_flag: '--model {MODEL}', models: {}, verified: false },
+    deepseek: { cmd: 'deepseek exec {MODEL_FLAG} "Read the file {PROMPT_FILE} and follow its instructions exactly."', prompt: 'file', output: 'text', model_flag: '--model {MODEL}', models: {}, verified: false }
+  }
+};
+var RUNNER_ROLES = ['intake', 'spec-writer', 'implementer', 'approver', 'reviewer-code', 'reviewer-security', 'reviewer-ux', 'reviewer-ui', 'reviewer-data', 'reviewer-access'];
+var HARNESS_NAME_RE = /^[a-z0-9][a-z0-9_-]{0,30}$/;
+var PLACEHOLDER_HELP = 'Placeholders: <span class="ph" style="display:inline-flex"><code>{MODEL_FLAG}</code><code>{MODEL}</code><code>{TOOLS}</code><code>{PROMPT_FILE}</code><code>{ROLE}</code></span>';
+
+function harnessesInUse(rn) {
+  var rh = obj(rn.role_harness);
+  return uniq([rn.harness].concat(Object.keys(rh).map(function (k) { return rh[k]; }))).filter(Boolean).map(str);
+}
+function roleLabel(role) {
+  var m = role.match(/^reviewer-(.+)$/);
+  return m ? revLabel(m[1]) + ' reviewer' : (AGENT_LABEL[role] || cap(role));
+}
+
+function runnerSection() {
+  var rn = app.draft.runner;
+  var h = intro('Agent tools', 'Which command-line tool runs each agent, and how the factory calls it.');
+  h += '<div class="note-info" role="note"><p>These settings are used by <code>python factory/bin/run.py</code>. Inside Claude Code, <code>/factory run</code> uses Claude Code\'s own subagents and ignores this section.</p>' +
+    '<p>Check a tool with <code>python factory/bin/run.py doctor</code>.</p></div>';
+  if (!rn || typeof rn !== 'object' || Array.isArray(rn)) {
+    return h + '<section class="emptystate" aria-labelledby="h-norunner"><h2 id="h-norunner">No agent tool settings yet</h2>' +
+      '<p>config.json has no <span class="mono">runner</span> block. Start from the defaults: Claude Code for every agent, with presets for Codex and DeepSeek.</p>' +
+      '<button type="button" class="btn btn-primary" data-action="setup-runner">Use the default agent tools</button></section>';
+  }
+  var hs = obj(rn.harnesses), names = Object.keys(hs), rh = obj(rn.role_harness), inUse = harnessesInUse(rn);
+  var nameOpts = names.map(function (n) { return { v: n, t: n }; });
+  var def = str(rn.harness);
+
+  h += '<section aria-labelledby="h-which" class="card"><h2 id="h-which">Which tool runs the agents</h2><div class="fields">' +
+    '<div class="fld"><label class="lbl" for="' + fieldId('runner.harness') + '">Default tool</label>' +
+    selectHTML(fieldId('runner.harness'), 'runner.harness', def, nameOpts, ' data-rerender="1" aria-describedby="' + fieldId('runner.harness') + '-h"') +
+    '<span class="help" id="' + fieldId('runner.harness') + '-h">Runs every agent that has no tool of its own below.</span></div>' +
+    textField('runner.agent_timeout_minutes', 'Agent timeout (minutes)', '1 to 480. An agent still running after this is stopped.', { input: 'number', type: 'int', min: 1, max: 480, step: 1 }) +
+    '</div>' +
+    '<div class="tblbox"><table class="tbl" style="min-width:420px"><caption class="visually-hidden">Tool per agent</caption><thead><tr><th scope="col">Agent</th><th scope="col">Tool</th></tr></thead><tbody>' +
+    RUNNER_ROLES.map(function (role) {
+      var p = 'runner.role_harness.' + role;
+      return '<tr><td>' + esc(roleLabel(role)) + ' <span class="mono small mute">' + esc(role) + '</span></td><td>' +
+        selectHTML(fieldId(p), p, rh[role] === undefined ? '' : rh[role], [{ v: '', t: 'Default (' + (def || 'not set') + ')' }].concat(nameOpts),
+          ' data-rerender="1" aria-label="Tool for the ' + esc(roleLabel(role)) + '"', 'opt') + '</td></tr>';
+    }).join('') + '</tbody></table></div></section>';
+
+  h += '<div class="row wrapflex" style="gap:8px"><h2 style="font-size:18px;flex:1 1 auto">Tools <span style="font-weight:500;color:var(--mute);font-size:14px">· ' + names.length + '</span></h2>' +
+    '<button type="button" class="btn btn-primary" id="btn-add-harness" data-action="add-harness">+ Add agent tool</button></div>';
+  if (!names.length) h += '<div class="empty">No agent tools. Add one; the runner needs at least one.</div>';
+  h += names.map(function (n) { return harnessCard(n, obj(hs[n]), inUse.indexOf(n) >= 0); }).join('');
+  return h;
+}
+
+function harnessCard(name, hc, used) {
+  var p = 'runner.harnesses.' + name + '.', hid = 'h-hn-' + idSafe(name), models = obj(hc.models);
+  var promptWarn = hc.prompt === 'file' && str(hc.cmd).trim() && str(hc.cmd).indexOf('{PROMPT_FILE}') < 0;
+  var rm = used
+    ? '<button type="button" class="btn" disabled title="In use: pick another tool for every agent that uses it first" aria-label="Remove ' + esc(name) + ' (in use, cannot be removed)">Remove</button>'
+    : '<button type="button" class="btn btn-danger" id="rmh-' + idSafe(name) + '" data-action="remove-harness" data-name="' + esc(name) + '" aria-label="Remove agent tool ' + esc(name) + '">Remove</button>';
+  return '<section class="card" aria-labelledby="' + hid + '">' +
+    '<div class="row wrapflex" style="gap:8px"><h2 id="' + hid + '" class="mono">' + esc(name) + '</h2>' +
+    (hc.verified === true ? chip('verified', 'pass') : chip('preset: check its --help', 'warn')) +
+    (used ? chip('in use', 'info') : '') + '<span class="grow"></span>' + rm + '</div>' +
+    '<div class="fields">' +
+    textField(p + 'cmd', 'Command', PLACEHOLDER_HELP, { mono: true, full: true, srPrefix: name }) +
+    (promptWarn ? '<div class="warn-text fld full" role="note">The prompt is passed as a file, so the command must use {PROMPT_FILE}.</div>' : '') +
+    '<div class="fld"><label class="lbl" for="' + fieldId(p + 'prompt') + '"><span class="visually-hidden">' + esc(name) + ' </span>Prompt passed by</label>' +
+    selectHTML(fieldId(p + 'prompt'), p + 'prompt', hc.prompt, [{ v: 'stdin', t: 'stdin' }, { v: 'file', t: 'a file the command names ({PROMPT_FILE})' }], ' data-rerender="1"') + '</div>' +
+    '<div class="fld"><label class="lbl" for="' + fieldId(p + 'output') + '"><span class="visually-hidden">' + esc(name) + ' </span>Output</label>' +
+    selectHTML(fieldId(p + 'output'), p + 'output', hc.output, [{ v: 'text', t: 'text' }, { v: 'claude-json', t: 'claude-json' }], ' aria-describedby="' + fieldId(p + 'output') + '-h"') +
+    '<span class="help" id="' + fieldId(p + 'output') + '-h">claude-json: Claude Code\'s --output-format json, lets the runner record cost.</span></div>' +
+    textField(p + 'model_flag', 'Model flag', 'Uses {MODEL}; leave empty to never pass a model.', { mono: true, srPrefix: name, placeholder: '--model {MODEL}' }) +
+    '</div>' +
+    '<div class="tblbox"><table class="tbl" style="min-width:360px"><caption class="visually-hidden">' + esc(name) + ' model per tier</caption><thead><tr><th scope="col">Tier</th><th scope="col">Model name for this tool</th></tr></thead><tbody>' +
+    MODELS.map(function (t) {
+      var mp = p + 'models.' + t, v = models[t];
+      return '<tr><td>' + esc(cap(t)) + '</td><td><input class="field mono" style="width:100%" type="text" id="' + fieldId(mp) + '" data-bind="' + esc(mp) + '" data-type="opt" value="' + esc(v === undefined || v === null ? '' : v) + '" placeholder="the tool\'s default model" aria-label="' + esc(name) + ' model for the ' + esc(t) + ' tier" spellcheck="false" autocomplete="off"></td></tr>';
+    }).join('') + '</tbody></table></div>' +
+    '<p class="help" style="margin:0">Empty = the tool\'s default model.</p>' +
+    '<div class="switch-row"><input type="checkbox" id="' + fieldId(p + 'verified') + '" data-bind="' + esc(p + 'verified') + '" data-type="bool"' + (hc.verified === true ? ' checked' : '') + '>' +
+    '<label for="' + fieldId(p + 'verified') + '">I checked this command against the tool\'s --help</label></div>' +
+    '</section>';
+}
+
+function addHarness() {
+  var rn = app.draft.runner;
+  if (!rn || typeof rn !== 'object') return;
+  if (!rn.harnesses || typeof rn.harnesses !== 'object' || Array.isArray(rn.harnesses)) rn.harnesses = {};
+  var name = window.prompt('Name for the new agent tool (lower-case letters, digits, - or _):', '');
+  if (name === null) return;
+  name = name.trim();
+  if (!HARNESS_NAME_RE.test(name)) { toast('Use lower-case letters, digits, - or _ (up to 31 characters), starting with a letter or digit.'); return; }
+  if (Object.prototype.hasOwnProperty.call(rn.harnesses, name)) { toast('There is already an agent tool called ' + name + '.'); return; }
+  rn.harnesses[name] = { cmd: '', prompt: 'file', output: 'text', model_flag: '--model {MODEL}', models: {}, verified: false };
+  rerenderSection();
+  var f = $(fieldId('runner.harnesses.' + name + '.cmd'));
+  if (f) f.focus();
+}
+function removeHarness(name) {
+  var rn = app.draft.runner;
+  if (!rn || !rn.harnesses || !Object.prototype.hasOwnProperty.call(rn.harnesses, name)) return;
+  if (harnessesInUse(rn).indexOf(name) >= 0) return;
+  if (!window.confirm('Remove the agent tool "' + name + '"? Nothing is saved until you press Save settings.')) return;
+  delete rn.harnesses[name];
+  rerenderSection();
+  var b = $('btn-add-harness'); if (b) b.focus();
+}
+
 /* --- limits --- */
 
 function limitsSection() {
@@ -1959,6 +2125,10 @@ function applyBind(el) {
       var order = uniq(SURFACES.concat(cur));
       v = order.filter(function (x) { return cur.indexOf(x) >= 0; });
       break;
+    case 'opt': /* empty value removes the key (e.g. role_harness "Default", empty model name) */
+      v = str(el.value).trim();
+      if (v === '') { delPath(app.draft, path); afterEdit(); return; }
+      break;
     default: v = el.value;
   }
   setPath(app.draft, path, v);
@@ -2027,6 +2197,13 @@ function onAction(action, el, ev) {
       LOCKED_PATHS.slice().reverse().forEach(function (p) { if (app.draft.protected_paths.indexOf(p) < 0) app.draft.protected_paths.unshift(p); });
       rerenderSection();
       var ap = $('btn-add-path'); if (ap) ap.focus();
+      break;
+    case 'add-harness': addHarness(); break;
+    case 'remove-harness': removeHarness(el.getAttribute('data-name')); break;
+    case 'setup-runner':
+      app.draft.runner = clone(DEFAULT_RUNNER);
+      rerenderSection();
+      var dh = $(fieldId('runner.harness')); if (dh) dh.focus();
       break;
   }
 }
@@ -2178,7 +2355,7 @@ document.addEventListener('change', function (ev) {
   }
   if (!el.getAttribute('data-bind')) return;
   applyBind(el);
-  if (el.type === 'checkbox') rerenderSection();
+  if (el.type === 'checkbox' || el.getAttribute('data-rerender')) rerenderSection();
 });
 document.addEventListener('keydown', function (ev) {
   if (ev.key === 'Escape' && $('modal').classList.contains('fallback')) closeModal();

@@ -52,6 +52,12 @@ steps: `python factory/bin/serve.py` (dashboard). Each job works in
 `.worktrees/<job-id>`; tools that scan the repo should exclude `.worktrees/`.
 ```
 
+If the user will run the agents with another tool (Codex, DeepSeek, …):
+put the section above in `AGENTS.md` (most non-Claude tools read that file),
+set `runner.harness` in `factory/config.json` (or in the dashboard under
+Settings → Agent tools), and fill that tool's `models` and command from its
+`--help`. Then `python factory/bin/run.py doctor` must print `ok`.
+
 ## 4. Verify
 
 1. `python factory/bin/job.py queue` runs (needs `gh`).

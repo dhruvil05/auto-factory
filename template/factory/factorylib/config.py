@@ -62,7 +62,41 @@ DEFAULTS = {
     },
     "cost_caps_usd": {"job": None, "run": None},
     "prices_usd_per_mtok": {},
+    "runner": {
+        "harness": "claude",
+        "role_harness": {},
+        "agent_timeout_minutes": 60,
+        "harnesses": {
+            "claude": {
+                "cmd": 'claude -p {MODEL_FLAG} --permission-mode dontAsk --allowedTools "{TOOLS}" --output-format json',
+                "prompt": "stdin",
+                "output": "claude-json",
+                "model_flag": "--model {MODEL}",
+                "models": {"fable": "fable", "opus": "opus", "sonnet": "sonnet", "haiku": "haiku"},
+                "verified": True,
+            },
+            "codex": {
+                "cmd": 'codex exec {MODEL_FLAG} --sandbox workspace-write --skip-git-repo-check '
+                       '"Read the file {PROMPT_FILE} and follow its instructions exactly."',
+                "prompt": "file",
+                "output": "text",
+                "model_flag": "--model {MODEL}",
+                "models": {},
+                "verified": False,
+            },
+            "deepseek": {
+                "cmd": 'deepseek exec {MODEL_FLAG} "Read the file {PROMPT_FILE} and follow its instructions exactly."',
+                "prompt": "file",
+                "output": "text",
+                "model_flag": "--model {MODEL}",
+                "models": {},
+                "verified": False,
+            },
+        },
+    },
 }
+ROLES = MAIN_AGENTS + tuple(f"reviewer-{r}" for r in REVIEWERS)
+HARNESS_PLACEHOLDERS = ("{MODEL_FLAG}", "{MODEL}", "{TOOLS}", "{PROMPT_FILE}", "{ROLE}")
 
 
 class ConfigError(Exception):
@@ -71,13 +105,18 @@ class ConfigError(Exception):
         self.errors = errors
 
 
-def _merge(defaults, value):
+# Maps whose entries the user adds and removes: taken as saved, never refilled
+# from the defaults (otherwise a removed tool or reviewer would come back).
+AS_SAVED = {("surface_reviewers",), ("prices_usd_per_mtok",), ("runner", "harnesses"), ("runner", "role_harness")}
+
+
+def _merge(defaults, value, path=()):
     """Fill keys missing from value with defaults, recursively for dicts."""
-    if not isinstance(defaults, dict) or not isinstance(value, dict):
+    if path in AS_SAVED or not isinstance(defaults, dict) or not isinstance(value, dict):
         return copy.deepcopy(value)
     out = copy.deepcopy(defaults)
     for k, v in value.items():
-        out[k] = _merge(defaults.get(k), v) if k in defaults else copy.deepcopy(v)
+        out[k] = _merge(defaults.get(k), v, path + (k,)) if k in defaults else copy.deepcopy(v)
     return out
 
 
@@ -232,7 +271,63 @@ def validate(cfg):
             keys = ("input", "output", "cache_write_5m", "cache_write_1h", "cache_read")
             if not isinstance(p, dict) or any(not isinstance(p.get(k), (int, float)) or p.get(k) < 0 for k in keys):
                 e.append(f"prices_usd_per_mtok.{model} needs {', '.join(keys)} as numbers")
+    _validate_runner(e, cfg.get("runner"))
     return e
+
+
+def harnesses_in_use(runner):
+    return {runner.get("harness")} | set((runner.get("role_harness") or {}).values())
+
+
+def _validate_runner(e, runner):
+    if not isinstance(runner, dict):
+        e.append("runner must be an object")
+        return
+    hs = runner.get("harnesses")
+    if not isinstance(hs, dict) or not hs:
+        e.append("runner.harnesses must define at least one agent tool")
+        return
+    for name, h in hs.items():
+        where = f"runner.harnesses.{name}"
+        if not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,30}", name):
+            e.append(f"{where}: name must be lower-case letters, digits, - or _")
+        if not isinstance(h, dict):
+            e.append(f"{where} must be an object")
+            continue
+        cmd = h.get("cmd")
+        if not isinstance(cmd, str) or "\n" in cmd:
+            e.append(f"{where}.cmd must be one line of text")
+            continue
+        if h.get("prompt") not in ("stdin", "file"):
+            e.append(f"{where}.prompt must be stdin or file")
+        elif h.get("prompt") == "file" and cmd and "{PROMPT_FILE}" not in cmd:
+            e.append(f"{where}.cmd must use {{PROMPT_FILE}} when the prompt is passed as a file")
+        if h.get("output") not in ("text", "claude-json"):
+            e.append(f"{where}.output must be text or claude-json")
+        flag = h.get("model_flag")
+        if not isinstance(flag, str) or (flag and "{MODEL}" not in flag):
+            e.append(f"{where}.model_flag must be empty or use {{MODEL}}")
+        models = h.get("models")
+        if not isinstance(models, dict) or any(k not in MODELS or not isinstance(v, str) or not v.strip()
+                                               for k, v in models.items()):
+            e.append(f"{where}.models must map {', '.join(MODELS)} to model names")
+        if not isinstance(h.get("verified", False), bool):
+            e.append(f"{where}.verified must be true or false")
+    if runner.get("harness") not in hs:
+        e.append(f"runner.harness must be one of: {', '.join(hs)}")
+    rh = runner.get("role_harness")
+    if not isinstance(rh, dict):
+        e.append("runner.role_harness must map roles to agent tools")
+    else:
+        for role, name in rh.items():
+            if role not in ROLES:
+                e.append(f"runner.role_harness: unknown role {role!r} (roles: {', '.join(ROLES)})")
+            if name not in hs:
+                e.append(f"runner.role_harness.{role}: unknown agent tool {name!r}")
+    for name in harnesses_in_use(runner):
+        if name in hs and isinstance(hs[name], dict) and not (hs[name].get("cmd") or "").strip():
+            e.append(f"runner.harnesses.{name}.cmd is empty but the runner uses it")
+    _int(e, "runner.agent_timeout_minutes", runner.get("agent_timeout_minutes"), 1, 480)
 
 
 def save(cfg, path=None, history=None):

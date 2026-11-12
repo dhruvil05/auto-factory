@@ -73,6 +73,31 @@ class ConfigTest(unittest.TestCase):
                 config.save(cfg(concurrency=0), path, hist)
             self.assertEqual(json.loads(path.read_text())["concurrency"], 2)
 
+    def test_removed_entries_stay_removed(self):
+        with tempfile.TemporaryDirectory() as d:
+            path, hist = Path(d) / "config.json", Path(d) / "hist"
+            c = cfg()
+            del c["runner"]["harnesses"]["codex"]
+            c["runner"]["harnesses"]["claude"]["models"].pop("haiku")
+            del c["surface_reviewers"]["ui"]["ui"]
+            config.save(c, path, hist)
+            loaded = config.load(path)
+            self.assertNotIn("codex", loaded["runner"]["harnesses"])
+            self.assertNotIn("haiku", loaded["runner"]["harnesses"]["claude"]["models"])
+            self.assertEqual(loaded["surface_reviewers"]["ui"], {"ux": "sonnet"})
+            self.assertEqual(loaded["runner"]["agent_timeout_minutes"], 60)  # other keys still filled
+
+    def test_runner_validation(self):
+        c = cfg()
+        c["runner"]["harness"] = "nope"
+        c["runner"]["role_harness"] = {"reviewer-magic": "claude", "intake": "ghost"}
+        c["runner"]["harnesses"]["codex"]["cmd"] = "codex exec"  # file prompt without {PROMPT_FILE}
+        c["runner"]["harnesses"]["claude"]["models"]["opus"] = ""
+        errors = " | ".join(config.validate(c))
+        for needle in ("runner.harness must be one of", "unknown role 'reviewer-magic'",
+                       "unknown agent tool 'ghost'", "{PROMPT_FILE}", "claude.models"):
+            self.assertIn(needle, errors)
+
     def test_load_fills_missing_keys(self):
         with tempfile.TemporaryDirectory() as d:
             path = Path(d) / "config.json"

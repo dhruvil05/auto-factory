@@ -70,10 +70,11 @@ def _kill_tree(proc):
             pass
 
 
-def run_command(command, cwd, shell, timeout, env=None):
-    """Run one project command. Returns (exit_code, output, seconds, timed_out).
+def run_command(command, cwd, shell, timeout, env=None, input_text=None):
+    """Run one command. Returns (exit_code, output, seconds, timed_out).
 
-    Non-interactive: stdin is closed. The whole process tree dies on timeout.
+    Non-interactive: stdin is closed unless `input_text` is given. The whole
+    process tree dies on timeout.
     """
     kwargs = {}
     if os.name == "nt":
@@ -84,11 +85,12 @@ def run_command(command, cwd, shell, timeout, env=None):
     full_env.update(env or {})
     full_env.setdefault("CI", "1")
     start = time.monotonic()
-    proc = subprocess.Popen(shell_argv(command, shell), cwd=str(cwd), stdin=subprocess.DEVNULL,
+    proc = subprocess.Popen(shell_argv(command, shell), cwd=str(cwd),
+                            stdin=subprocess.PIPE if input_text is not None else subprocess.DEVNULL,
                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
                             encoding="utf-8", errors="replace", env=full_env, **kwargs)
     try:
-        out, _ = proc.communicate(timeout=timeout)
+        out, _ = proc.communicate(input=input_text, timeout=timeout)
         timed_out = False
     except subprocess.TimeoutExpired:
         _kill_tree(proc)

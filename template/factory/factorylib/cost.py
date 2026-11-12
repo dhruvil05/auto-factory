@@ -36,12 +36,30 @@ def _price(prices, model):
     return None
 
 
+def runner_costs(job_id):
+    """Costs the runner recorded per agent call (runs/*.json), for tools that report one."""
+    total, by_agent, partial = 0.0, {}, False
+    runs = paths.job_dir(job_id) / "runs"
+    for f in sorted(runs.glob("*.json")) if runs.exists() else []:
+        try:
+            rec = json.loads(f.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            partial = True
+            continue
+        if rec.get("cost_usd") is None:
+            partial = True
+            continue
+        total += rec["cost_usd"]
+        by_agent[rec.get("role", "agent")] = by_agent.get(rec.get("role", "agent"), 0.0) + rec["cost_usd"]
+    return total, by_agent, partial
+
+
 def job_cost(job_id, prices):
     needle = f"Job: {job_id}."
-    total, by_agent, partial = 0.0, {}, False
+    total, by_agent, partial = runner_costs(job_id)
     root = transcripts_dir()
     if not root.exists():
-        return {"usd": 0.0, "by_agent": {}, "partial": False}
+        return {"usd": round(total, 2), "by_agent": {k: round(v, 2) for k, v in by_agent.items()}, "partial": partial}
     for path in root.glob("*/subagents/agent-*.jsonl"):
         try:
             with path.open(encoding="utf-8", errors="replace") as f:

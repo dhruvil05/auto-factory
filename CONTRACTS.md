@@ -17,6 +17,7 @@ Paths below are relative to the **target repo** the factory is installed in
 <repo>/factory/bin/port.py                  ports: which, free, kill
 <repo>/factory/bin/shot.py                  signed-in screenshots (optional Playwright)
 <repo>/factory/bin/serve.py                 dashboard + settings server (127.0.0.1)
+<repo>/factory/bin/run.py                   tool-neutral runner: drives any agent CLI (Claude, Codex, DeepSeek…)
 <repo>/factory/factorylib/                  shared Python (stdlib only)
 <repo>/factory/dashboard/index.html         dashboard single-page app
 <repo>/factory/seed-users.json              test-only users per role (optional)
@@ -231,6 +232,54 @@ archive <job>            zip a terminal job into factory/archive/
 - `prices_usd_per_mtok`: `{"<model id>": {"input", "output", "cache_write_5m",
   "cache_write_1h", "cache_read"}}`. Empty = cost shows as partial.
 - Locked: `factory/*` and `.claude/*` can't be removed from `protected_paths`.
+
+## Two ways to run the agents
+
+1. **Inside Claude Code**: `/factory run` (the skill) spawns the agents as
+   Claude Code subagents.
+2. **Any agent CLI**: `python factory/bin/run.py [<issue>|doctor]` is a script
+   orchestrator. It starts each agent as its own command from config `runner`,
+   checks the file the agent had to write, and moves the job on with the same
+   scripts. The state machine and files are identical, so a job can switch
+   between the two between runs.
+
+Runner config (inside config.json):
+
+```json
+"runner": {
+  "harness": "claude",                 // tool for every role…
+  "role_harness": {"intake": "codex"}, // …unless a role names its own
+  "agent_timeout_minutes": 60,
+  "harnesses": {
+    "<name>": {
+      "cmd": "…",                // one line; placeholders below
+      "prompt": "stdin|file",    // how the prompt reaches the tool
+      "output": "text|claude-json",
+      "model_flag": "--model {MODEL}",
+      "models": {"opus": "<model id>"},  // tier → model; missing = tool default
+      "verified": false          // true once the command was checked against the tool's --help
+    }
+  }
+}
+```
+
+Placeholders: `{MODEL_FLAG}` (the model flag, or nothing when the tier has no
+model), `{MODEL}`, `{TOOLS}` (the role's tools from its agent file, comma
+separated), `{PROMPT_FILE}`, `{ROLE}`. Agent commands run from `<repo>` with
+the same `FACTORY_*` env vars as checks, plus `FACTORY_ROLE`.
+
+The prompt is `<header line>`, `Role: <role>.`, the task line (e.g.
+`Implement round 2. The gate failed: …`, `Review round 1.`), optionally
+`Your port: <p>.`, then a tool-neutral preamble and the agent file's body
+without frontmatter. The runner, not the agent, guarantees: the gate's dry run
+after the implementer (one retry), push + draft PR when the agent couldn't,
+one retry when an agent didn't leave its file, reverting code changes by
+read-only roles, and stopping when anything touches the main checkout.
+
+Runner files in the job folder: `runs/NNN-<role>.prompt.md`, `.log`,
+`.json` (`{role, harness, model, task, started, seconds, exit, timed_out,
+cost_usd, reply, error}`), `runs/warnings.md`, `runs/stopped.md`.
+`cost_usd` (from `claude-json` output) is added to the job's cost.
 
 ## Dashboard API (`serve.py`, 127.0.0.1 only)
 

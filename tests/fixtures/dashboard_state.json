@@ -66,6 +66,16 @@
     "cost_caps_usd": {"job": 5, "run": null},
     "prices_usd_per_mtok": {
       "claude-opus-4-1": {"input": 15, "output": 75, "cache_write_5m": 18.75, "cache_write_1h": 30, "cache_read": 1.5}
+    },
+    "runner": {
+      "harness": "claude",
+      "role_harness": {"reviewer-security": "codex"},
+      "agent_timeout_minutes": 60,
+      "harnesses": {
+        "claude": {"cmd": "claude -p {MODEL_FLAG} --permission-mode dontAsk --allowedTools \"{TOOLS}\" --output-format json", "prompt": "stdin", "output": "claude-json", "model_flag": "--model {MODEL}", "models": {"fable": "fable", "opus": "opus", "sonnet": "sonnet", "haiku": "haiku"}, "verified": true},
+        "codex": {"cmd": "codex exec {MODEL_FLAG} --sandbox workspace-write --skip-git-repo-check \"Read the file {PROMPT_FILE} and follow its instructions exactly.\"", "prompt": "file", "output": "text", "model_flag": "--model {MODEL}", "models": {}, "verified": false},
+        "deepseek": {"cmd": "deepseek exec {MODEL_FLAG} \"Read the file {PROMPT_FILE} and follow its instructions exactly.\"", "prompt": "file", "output": "text", "model_flag": "--model {MODEL}", "models": {}, "verified": false}
+      }
     }
   },
   "jobs": [
@@ -282,7 +292,19 @@
         {"path": "round-2/checks.md", "first_line": "GATE: PASS", "summary": ["All steps passed; tests passed on retry"], "size": 660},
         {"path": "round-2/review-code.md", "first_line": "VERDICT: PASS", "summary": ["Soft delete is consistent with the Users module"], "size": 880},
         {"path": "round-2/review-access.md", "first_line": "VERDICT: PASS", "summary": ["Audit entry is written for every delete"], "size": 1010},
-        {"path": "decision.md", "first_line": "ESCALATE", "summary": ["Criteria met, but this widens what viewers can do", "Needs a product decision, not a code fix"], "size": 1180}
+        {"path": "decision.md", "first_line": "ESCALATE", "summary": ["Criteria met, but this widens what viewers can do", "Needs a product decision, not a code fix"], "size": 1180},
+        {"path": "runs/001-intake.prompt.md", "first_line": "Job: 038-let-viewers-delete-customers. Job folder: …", "summary": [], "size": 5120},
+        {"path": "runs/001-intake.log", "first_line": "", "summary": [], "size": 2210},
+        {"path": "runs/001-intake.json", "first_line": "{", "summary": [], "size": 640},
+        {"path": "runs/warnings.md", "first_line": "# Runner warnings", "summary": [], "size": 210}
+      ],
+      "044-export-invoices-as-csv": [
+        {"path": "intake.md", "first_line": "DECISION: ACCEPT", "summary": ["Export the filtered Invoices list as CSV", "Risk medium: new download endpoint"], "size": 1400},
+        {"path": "spec.md", "first_line": "# Export invoices as CSV", "summary": ["CSV matches the visible columns and filters"], "size": 2900},
+        {"path": "round-1/checks.md", "first_line": "GATE: FAIL", "summary": ["tests failed: 2 failures in invoices/export.test"], "size": 900},
+        {"path": "runs/004-implementer.prompt.md", "first_line": "Job: 044-export-invoices-as-csv. Job folder: …", "summary": [], "size": 6400},
+        {"path": "runs/004-implementer.log", "first_line": "", "summary": [], "size": 48210},
+        {"path": "runs/stopped.md", "first_line": "# Stopped", "summary": [], "size": 180}
       ]
     },
     "contents": {
@@ -290,7 +312,11 @@
         "round-1/checks.md": "GATE: PASS\nCOMMIT: 4c1d9e2\n\n## Summary\n- Ran the check steps set in Settings, in the job worktree, against backoffice_app_job_45\n- Diff 214 lines in 7 files (budget for high risk: 1500 lines, 40 files)\n\n## Steps\n| Step | Result | Time |\n|---|---|---|\n| lint | PASS | 9s |\n| tests | PASS | 1m 42s |\n\n## Built-in rules\n| Rule | Result |\n|---|---|\n| protected paths | PASS: none changed |\n| diff budget | PASS: 214 lines, 7 files (high: 1500, 40) |\n| secret scan | PASS: clean |\n| local-only env | PASS |\n",
         "decision.md": "APPROVE\n\n## Summary\n- All 6 criteria met; spot-checked the filter on the list page\n- Would merge, but database changes need a human merge\n\n## Why\nEverything in the spec is done and both reviewers passed.\n\n## Acceptance criteria\n- [x] 1. Orders have a priority\n"
       },
+      "044-export-invoices-as-csv": {
+        "runs/stopped.md": "# Stopped\n\nThe implementer (codex) ran past agent_timeout_minutes (60) and was stopped. The job goes to a human.\n"
+      },
       "038-let-viewers-delete-customers": {
+        "runs/warnings.md": "# Runner warnings\n\n- codex is not marked verified in Settings > Agent tools.\n- reviewer-security: output is text, so its cost was not recorded.\n",
         "round-1/checks.md": "GATE: PASS\nCOMMIT: 1a2b3c4\n\n## Summary\n- All steps passed\n\n## Steps\n| Step | Result | Time |\n|---|---|---|\n| lint | PASS | 8s |\n| tests | PASS | 1m 31s |\n\n## Built-in rules\n| Rule | Result |\n|---|---|\n| protected paths | PASS: none changed |\n| diff budget | PASS: 120 lines, 5 files (high: 1500, 40) |\n| secret scan | PASS: clean |\n| local-only env | PASS |\n",
         "round-2/checks.md": "GATE: PASS\nCOMMIT: 5d6e7f8\n\n## Summary\n- All steps passed; tests passed on retry\n\n## Steps\n| Step | Result | Time |\n|---|---|---|\n| lint | PASS | 8s |\n| tests | PASS (FLAKY: passed on retry) | 3m 02s |\n\n## Built-in rules\n| Rule | Result |\n|---|---|\n| protected paths | PASS: none changed |\n| diff budget | PASS: 168 lines, 6 files (high: 1500, 40) |\n| secret scan | PASS: clean |\n| local-only env | PASS |\n",
         "decision.md": "ESCALATE\n\n## Summary\n- Criteria met, but this widens what viewers can do\n- Needs a product decision, not a code fix\n\n## Why\nThe change is correct and audited, but it is a permission change.\n\n## For the human\nShould viewers really delete customers, or only archive them?\nReply with feedback (e.g. \"archive only\") or reject the job.\n"

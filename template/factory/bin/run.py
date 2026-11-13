@@ -285,9 +285,19 @@ def step_review(job):
     todo = [r for r in job["agents"]["reviewers"] if not valid(r)]
     errors = []
 
+    def task_for(r):
+        """From round 2: point the reviewer at what it already reviewed, so it checks only the changes."""
+        task = f"Review round {n}."
+        if n > 1:
+            code, out, _ = script("job", "reviewed", jid, r)
+            parts = out.split()
+            if code == 0 and len(parts) == 2 and parts[0].startswith("round-"):
+                task += f" Previous review: round {parts[0][6:]} at {parts[1]}."
+        return task
+
     def one(r):
         try:
-            with_retry(jid, f"reviewer-{r}", f"Review round {n}.", lambda: valid(r), tier(None, job, r),
+            with_retry(jid, f"reviewer-{r}", task_for(r), lambda: valid(r), tier(None, job, r),
                        r if r in REVIEW_PORT_ROLES else None, what=f"round-{n}/review-{r}.md with a VERDICT line")
             script("job", "sync", jid)
         except Stop as e:

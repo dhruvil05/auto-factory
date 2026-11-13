@@ -15,6 +15,7 @@ Usage: python factory/bin/job.py <command> …
   reject <job> [--file <path>]     needs-info or needs-human → rejected, with your reason (stdin or file)
   agents <job> <json>      record the routed reviewers (route.py calls this)
   sync <job>               refresh gate, reviews and cost from the job's files
+  reviewed <job> <r>       `round-<M> <sha>` a reviewer last reviewed (for re-reviews), or `none`
   summary [<job>…]         table of jobs
   preflight                run the gate on origin/<base>; nothing starts when it fails
   pause | unpause          stop or allow new work (factory/PAUSE)
@@ -552,6 +553,20 @@ def cmd_reject(job, text):
     print(f"{job['id']}: rejected")
 
 
+def cmd_reviewed(job, reviewer):
+    """`round-<M> <sha>`: the latest earlier round with this reviewer's file and the commit
+    its gate passed, so a re-review can look only at what changed since. `none` otherwise."""
+    d = paths.job_dir(job["id"])
+    for m in range(job["round"] - 1, 0, -1):
+        if (d / f"round-{m}" / f"review-{reviewer}.md").exists():
+            sha = header(d / f"round-{m}" / "checks.md").get("COMMIT") if (d / f"round-{m}" / "checks.md").exists() else None
+            if sha and re.fullmatch(r"[0-9a-f]{7,40}", sha):
+                print(f"round-{m} {sha}")
+                return
+            break
+    print("none")
+
+
 def cmd_agents(job, spec):
     require(job["stage"] == "intake" and (job.get("intake") or {}).get("decision") == "ACCEPT",
             f"{job['id']}: route only a job that intake ACCEPTed")
@@ -659,6 +674,8 @@ def main(argv):
             else:
                 text = sys.stdin.read()
             (cmd_feedback if cmd == "feedback" else cmd_reject)(jobs.resolve(args[0]), text)
+        elif cmd == "reviewed" and len(args) == 2:
+            cmd_reviewed(jobs.resolve(args[0], locked=False), args[1])
         elif cmd == "agents" and len(args) == 2:
             cmd_agents(sync(jobs.resolve(args[0])), args[1])
         elif cmd == "sync" and len(args) == 1:

@@ -1,7 +1,9 @@
 # auto-factory
 
-An issue-driven software factory for backoffice projects, run by Claude Code
-or any other agent CLI (Codex, DeepSeek, …).
+An issue-driven software factory for any kind of project, run by Claude Code
+or any other agent CLI (Codex, DeepSeek, …). A short project profile tells the
+agents what your project is; starter profiles ship for backoffice, web apps,
+API services, libraries, mobile apps and data pipelines.
 Label a GitHub issue `factory`, run `/factory run`, and agents decide whether
 it's worth building, write a spec, implement it on its own branch, pass it
 through your checks, review it, and open a pull request. The approver merges
@@ -17,10 +19,10 @@ issue labeled `factory`
   intake            ACCEPT (maybe rescoped) | NEEDS-INFO (asks on the issue) | REJECT
   route.py          reviewers + models from risk and areas; may it auto-merge?
   job.py            worktree, branch, the job's own .env, database, migrations, seed
-  spec-writer       spec.md with testable acceptance criteria and a role matrix
+  spec-writer       spec.md with testable acceptance criteria (and who may do what, if the project has roles)
   implementer       commits, pushes, draft PR "Closes #n", impl.md
   gate.py           your check steps + built-in rules; FAIL goes straight back
-  reviewers         code (+ ux, ui, security, data, access by area), all in parallel
+  reviewers         code (+ ux, ui, security, data, authorization by area), all in parallel
   approver          APPROVE → job.py merge (or held for you) | ESCALATE → you
 ```
 
@@ -33,6 +35,7 @@ every job to you.
 
 ```
 install.py                     install or upgrade the factory in a project
+profiles/                      starter project profiles (backoffice, web-app, api-service, …)
 template/                      what gets installed
   .claude/skills/factory/      the /factory orchestrator (Claude Code)
   .agents/skills/factory/      the $factory skill (Codex), which drives run.py
@@ -58,19 +61,38 @@ Works on Windows (cmd, PowerShell or Git Bash), macOS and Linux.
 ## Install into a project
 
 ```bash
-python install.py "C:/path/to/your-backoffice-repo"
+python install.py "C:/path/to/your-repo" --profile web-app
 ```
 
-It copies `template/`, adds the runtime folders to `.gitignore`, and prints the
-remaining steps: tailor two placeholder lines in the intake and approver
-agents, create the three GitHub labels, commit and push, then open the
-dashboard and set the check steps.
+It copies `template/`, adds the runtime folders to `.gitignore`, puts the
+chosen **project profile** into `AGENTS.md` (and makes `CLAUDE.md` import it),
+and prints the remaining steps: fill in the profile's [bracketed] parts, create
+the three GitHub labels, commit and push, then open the dashboard and set the
+check steps. Profiles: `backoffice`, `web-app`, `api-service`, `library`,
+`mobile-app`, `data-pipeline`, `blank` (see [profiles/README.md](profiles/README.md)).
 
 Later, to take new scripts without losing your settings or tailored prompts:
 
 ```bash
-python install.py "C:/path/to/your-backoffice-repo" --upgrade
+python install.py "C:/path/to/your-repo" --upgrade
 ```
+
+Add `--prompts` to also take the newest agent prompts (your old ones are saved
+in `factory/archive/prompts-<time>/` first).
+
+## How the agents stay project-neutral and cheap
+
+- **Project profile, not hard-coded domain.** The agent instructions are
+  generic; everything specific (what the app is, roles, sensitive areas, where
+  auth and data rules live, UI conventions) is in the `## Factory profile`
+  section of `AGENTS.md`. Sections marked `None` / `No UI` switch checks off.
+- **Working rules in every agent:** search before reading, read only around the
+  relevant lines, never dump large or generated files, stop once the task can be
+  done, short outputs.
+- **Re-reviews look only at what changed** since the commit a reviewer last saw.
+- **Quick exits:** a reviewer whose area the diff doesn't touch passes at once.
+- **Cache-friendly prompts:** instructions first, job details last.
+- **Token counts** per agent run (Claude Code and Codex) on the job page.
 
 ## Run it
 

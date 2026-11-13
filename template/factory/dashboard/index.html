@@ -581,14 +581,14 @@ var RISKS = ['low', 'medium', 'high'];
 var RISK_CLS = { low: 'pend', medium: 'warn', high: 'fail' };
 var SURFACES = ['ui', 'security', 'data', 'access', 'integration'];
 var SURFACE_DESC = {
-  ui: 'Staff will see the change on a screen',
+  ui: 'People will see the change on a screen',
   security: 'Auth, user input reaching queries, secrets',
   data: 'Schema, migrations, reports and totals',
-  access: 'Roles, permissions, tenant scoping, audit log',
-  integration: 'Email, SMS, webhooks, payment providers'
+  access: 'Who may do what: roles, permissions, data ownership',
+  integration: 'Outside services: email, webhooks, payments, third-party APIs'
 };
 var RECOMMENDED_HUMAN = ['data', 'access', 'integration'];
-var REVIEWER_LABEL = { code: 'Code', security: 'Security', ux: 'UX', ui: 'UI', data: 'Data', access: 'Access' };
+var REVIEWER_LABEL = { code: 'Code', security: 'Security', ux: 'UX', ui: 'UI', data: 'Data', access: 'Authorization' };
 var AGENT_LABEL = { intake: 'Intake', 'spec-writer': 'Spec writer', implementer: 'Implementer', approver: 'Approver' };
 var MAIN_AGENTS = [
   { key: 'intake', label: 'Intake', help: 'Runs once per issue. Fable may bill to usage credits.' },
@@ -1707,6 +1707,7 @@ function runRow(n, set) {
   var bits = [];
   if (rec.harness) bits.push(esc(rec.harness) + (rec.model && rec.model !== '(tool default)' ? ' · ' + esc(rec.model) : ''));
   if (num(rec.seconds) !== null) bits.push(esc(fmtSecs(rec.seconds)));
+  if (num(rec.tokens) !== null) bits.push(esc(rec.tokens.toLocaleString()) + ' tokens');
   if (num(rec.cost_usd) !== null) bits.push(esc(fmtUsd(rec.cost_usd)));
   var status = !set.json ? '' : !rec.harness ? chip('…', 'pend', 'sm') : rec.timed_out ? chip('timed out', 'fail', 'sm') : failed ? chip('failed', 'fail', 'sm') : chip('ok', 'pass', 'sm');
   function btn(f, label) { return f ? '<button type="button" class="linkbtn" data-action="open-file" data-path="' + esc(f.path) + '">' + label + '</button>' : ''; }
@@ -2590,7 +2591,7 @@ var DEFAULT_RUNNER = {
   agent_timeout_minutes: 60,
   harnesses: {
     claude: { cmd: 'claude -p {MODEL_FLAG} --permission-mode dontAsk --allowedTools "{TOOLS}" --output-format json', prompt: 'stdin', output: 'claude-json', model_flag: '--model {MODEL}', models: { fable: 'fable', opus: 'opus', sonnet: 'sonnet', haiku: 'haiku' }, verified: true },
-    codex: { cmd: 'codex exec {MODEL_FLAG} --sandbox workspace-write --skip-git-repo-check "Read the file {PROMPT_FILE} and follow its instructions exactly."', prompt: 'file', output: 'text', model_flag: '--model {MODEL}', models: {}, verified: false },
+    codex: { cmd: 'codex exec {MODEL_FLAG} --sandbox workspace-write --skip-git-repo-check "Follow the instructions given on stdin exactly."', prompt: 'stdin', output: 'text', model_flag: '--model {MODEL}', models: {}, verified: false },
     deepseek: { cmd: 'deepseek exec {MODEL_FLAG} "Read the file {PROMPT_FILE} and follow its instructions exactly."', prompt: 'file', output: 'text', model_flag: '--model {MODEL}', models: {}, verified: false }
   }
 };

@@ -87,7 +87,7 @@ the implementer's Stop hook find the job by it.
 `SURFACES` is a comma-separated subset of `ui, security, data, access,
 integration`, or `none`. Reviewers `<r>`: `code, security, ux, ui, data, access`.
 
-Every agent file has a `## Summary` of 3–5 bullets right after its header; the
+Every agent file has a `## Summary` of at most 3 bullets right after its header; the
 dashboard shows it. Sections per file:
 
 - intake.md: Summary, Scope, Why, Questions (NEEDS-INFO only). Everything below
@@ -232,6 +232,64 @@ archive <job>            zip a terminal job into factory/archive/
 - `prices_usd_per_mtok`: `{"<model id>": {"input", "output", "cache_write_5m",
   "cache_write_1h", "cache_read"}}`. Empty = cost shows as partial.
 - Locked: `factory/*` and `.claude/*` can't be removed from `protected_paths`.
+
+## Project profile (makes the agents fit any project)
+
+The agent instructions are domain-neutral. Everything specific to one project
+lives in a **Factory profile**: a `## Factory profile` section in the
+project's `AGENTS.md` (Codex loads it automatically; `CLAUDE.md` imports it
+with a line `@AGENTS.md`, so Claude Code loads it too). `install.py --profile
+<name>` seeds it from `profiles/<name>.md`; you then replace the bracketed parts.
+Its subsections, by these exact names:
+
+| Subsection | Holds | Used by |
+|---|---|---|
+| `### What this project is` | product in 1–3 lines, who uses it | intake, spec-writer, approver |
+| `### Users and roles` | roles and what each may do, or `None` | spec-writer, ux, access |
+| `### Sensitive areas` | what always goes to a human (money, data deletion, …) | intake, approver |
+| `### Authorization` | where access checks live (middleware, policies), how to verify | implementer, access, security |
+| `### Data rules` | scoping/tenancy, audit log, migration tool and rules, money/rounding, or `None` | implementer, data, spec-writer |
+| `### UI conventions` | design system, components, theme location, or `No UI` | implementer, ui, ux |
+| `### Verify` | how to see the change working (dev server, seeded users) | implementer, ux, ui |
+| `### Terms` | glossary (optional) | everyone |
+
+A subsection that is missing, `None` or `No UI` turns the matching checks off.
+Agents never assume a domain the profile doesn't state.
+
+## Working rules every agent follows (token budget)
+
+Each agent file carries the same short "Working rules" block:
+
+- Context is the job header, the inputs listed for the role, and the project
+  profile. Don't explore beyond what the task needs.
+- Search before reading (grep/glob for symbols and paths). Read around the
+  relevant lines; read a whole file only when it is short or you change or
+  review all of it. Never read generated, vendored, minified, lock or build
+  files, and never dump large files.
+- Stop reading as soon as you can do the task.
+- Write short: `## Summary` is at most 3 bullets; don't restate the spec or
+  the diff; Findings are only real problems.
+
+Reviewers: **Findings** are blocking (they make the verdict CHANGES); **Notes**
+never block. Reviewers whose area the diff doesn't touch write a short PASS
+straight away (e.g. no UI files changed → `reviewer-ui` passes).
+
+## Re-reviews only look at what changed
+
+From round 2, the task line of a reviewer may end with
+`Previous review: round <M> at <sha>.` It comes from
+`python factory/bin/job.py reviewed <job> <reviewer>`, which prints
+`round-<M> <sha>` (the latest earlier round with that reviewer's file, and the
+commit its gate passed) or `none`. With it, the reviewer reads its own
+`round-<M>/review-<r>.md`, checks each earlier finding, and reviews only
+`git diff <sha>..HEAD` for new problems. Without it, it reviews the whole
+branch (`git diff origin/<base>...HEAD`).
+
+## Prompt layout for other agent tools
+
+`run.py` sends the role's instructions **first** and the job-specific block
+**last** (`## This job`: header line, `Role:`, task line, optional port), so
+the unchanging part can be cached by the provider.
 
 ## Two ways to run the agents
 

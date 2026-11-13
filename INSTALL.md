@@ -16,7 +16,7 @@ Stop and tell the user if any fails:
 ## 2. Copy
 
 ```bash
-python "<this package>/install.py" "<project root>"
+python "<this package>/install.py" "<project root>" --profile <name>
 ```
 
 If it lists files that already exist, show the user and ask before using `--upgrade`.
@@ -27,14 +27,13 @@ uses one tool today.
 
 ## 3. Tailor (keep structure, first lines and one-line replies unchanged)
 
-- `.claude/agents/intake.md`: replace the `This project: […]` line with one
-  sentence on what the app is and who uses it (from the README, CLAUDE.md, routes).
-- `.claude/agents/approver.md`: replace the `Project-specific: […]` line with what a
-  human must always see here.
-- `.claude/agents/reviewer-security.md`, `reviewer-access.md`: name this project's
-  auth middleware, role/permission definitions, tenant scoping and audit log.
-- `.claude/agents/reviewer-ui.md`: where the admin theme, tokens and shared
-  components live.
+- Pick the closest profile and pass it: `--profile backoffice | web-app |
+  api-service | library | mobile-app | data-pipeline | blank`. Then fill the
+  `## Factory profile` section it added to `AGENTS.md` from the README, routes,
+  models and config: what the project is, roles, sensitive areas, where
+  authorization and data rules live, UI conventions, how to verify. Keep it
+  under ~45 lines; write `None` / `No UI` where a section doesn't apply.
+  Don't edit the agent files for project details: the profile is the place.
 - `factory/config.json`: set `base_branch` and a `merge_method` the repo allows
   (`gh api repos/{owner}/{repo} --jq '{allow_merge_commit, allow_squash_merge, allow_rebase_merge}'`).
   Leave `checks` empty: the user sets them in the dashboard. You may suggest

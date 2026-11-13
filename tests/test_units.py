@@ -91,7 +91,7 @@ class ConfigTest(unittest.TestCase):
         c = cfg()
         c["runner"]["harness"] = "nope"
         c["runner"]["role_harness"] = {"reviewer-magic": "claude", "intake": "ghost"}
-        c["runner"]["harnesses"]["codex"]["cmd"] = "codex exec"  # file prompt without {PROMPT_FILE}
+        c["runner"]["harnesses"]["deepseek"]["cmd"] = "deepseek exec"  # file prompt without {PROMPT_FILE}
         c["runner"]["harnesses"]["claude"]["models"]["opus"] = ""
         errors = " | ".join(config.validate(c))
         for needle in ("runner.harness must be one of", "unknown role 'reviewer-magic'",

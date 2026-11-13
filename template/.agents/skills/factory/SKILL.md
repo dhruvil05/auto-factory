@@ -1,6 +1,6 @@
 ---
 name: factory
-description: Runs auto-factory, the issue-driven software factory for this backoffice app, from Codex. Use only when the user invokes $factory - "$factory run", "$factory run <n>", or "$factory" followed by a question, what needs them, feedback, a rejection, an answer to a factory question, or a new feature.
+description: Runs auto-factory, the issue-driven software factory for this project, from Codex. Use only when the user invokes $factory - "$factory run", "$factory run <n>", or "$factory" followed by a question, what needs them, feedback, a rejection, an answer to a factory question, or a new feature.
 ---
 
 # auto-factory (Codex)
@@ -17,6 +17,11 @@ $factory run          work the queue: resume unfinished jobs, start new issues
 $factory run <n>      run (or resume) issue #n only
 $factory <anything>   ask, check what needs you, give feedback, reject, answer, file a feature
 ```
+
+What the agents know about this project (what it is, users and roles,
+sensitive areas, authorization, data rules, UI conventions, how to verify)
+comes from the `## Factory profile` section of `AGENTS.md`. When agents
+misjudge the project, point the user there; don't edit it yourself.
 
 Run every command from the project root as `python factory/bin/<name>.py …`.
 Commands that talk to GitHub (`job.py`, `gh`) or start agents need network

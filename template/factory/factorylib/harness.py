@@ -36,6 +36,8 @@ as a standalone agent, not as a Claude Code subagent. So:
   after the implementer, pushes the branch and opens the draft PR if you
   couldn't, and reverts any code change made by a role that must only read.
 - Finish by replying with exactly the one line your instructions ask for.
+- Your job's details (the header line, your role and task) are in the
+  "## This job" section at the end.
 """
 
 
@@ -59,11 +61,13 @@ def harness_for(cfg, role):
 
 
 def build_prompt(cfg, job, role, task, port=None):
+    """Unchanging instructions first, the job-specific block last: providers cache a
+    prompt's stable prefix, so every run of a role reuses the cached instructions."""
     body, tools = load_agent(role)
     lines = [jobs.header_line(cfg, job), f"Role: {role}.", task]
     if port:
         lines.append(f"Your port: {port}.")
-    return "\n".join(lines) + "\n\n" + PREAMBLE + "\n" + body, tools
+    return PREAMBLE + "\n" + body.rstrip() + "\n\n## This job\n\n" + "\n".join(lines) + "\n", tools
 
 
 def render(h, model, tools, prompt_file, role):
@@ -103,6 +107,29 @@ def parse_output(kind, out):
         return "", None, "no JSON result in the tool's output"
     reply = next((l.strip() for l in reversed(out.splitlines()) if l.strip()), "")
     return reply, None, None
+
+
+def token_count(kind, out):
+    """Total tokens a run used, when the tool reports it: Claude Code's JSON `usage`,
+    or Codex's closing "tokens used" line followed by the number. None otherwise."""
+    if kind == "claude-json":
+        for line in reversed(out.strip().splitlines()):
+            if line.strip().startswith("{"):
+                try:
+                    usage = json.loads(line).get("usage") or {}
+                except (ValueError, AttributeError):
+                    continue
+                keys = ("input_tokens", "output_tokens", "cache_creation_input_tokens", "cache_read_input_tokens")
+                total = sum(usage.get(k) or 0 for k in keys if isinstance(usage.get(k), int))
+                return total or None
+        return None
+    lines = [l.strip() for l in out.splitlines()]
+    for i in range(len(lines) - 1, -1, -1):
+        m = re.match(r"^tokens used:?\s*([\d,]+)?$", lines[i], re.I)
+        if m:
+            raw = m.group(1) or next((l for l in lines[i + 1:i + 3] if re.fullmatch(r"[\d,]+", l)), "")
+            return int(raw.replace(",", "")) if raw else None
+    return None
 
 
 ERROR_LINE = re.compile(r"\b(error|failed|failure|fatal|denied|unauthori[sz]ed|forbidden|not found|invalid|refused|"
@@ -158,8 +185,8 @@ def run_agent(cfg, job, role, task, model_tier, port=None, role_for_port=None):
     record = {
         "role": role, "harness": name, "model": model or "(tool default)", "task": task,
         "started": started, "seconds": round(time.monotonic() - t0, 1), "exit": code,
-        "timed_out": timed_out, "cost_usd": cost, "reply": reply, "error": err,
-        "log": f"runs/{stem}.log",
+        "timed_out": timed_out, "cost_usd": cost, "tokens": token_count(h["output"], out),
+        "reply": reply, "error": err, "log": f"runs/{stem}.log",
     }
     (runs / f"{stem}.log").write_text(f"$ {command}\n\n{out}", encoding="utf-8")
     atomic_write(runs / f"{stem}.json", json.dumps(record, indent=2) + "\n")

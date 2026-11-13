@@ -1,6 +1,6 @@
 ---
 name: factory
-description: Orchestrates auto-factory, the issue-driven software factory for this backoffice app. Use when the user types /factory run, /factory run <n>, or /factory followed by anything else (a question, what needs them, feedback, a rejection, an answer to a factory question, or a new feature). The session that runs it is the single orchestrator for every job.
+description: Orchestrates auto-factory, the issue-driven software factory for this project. Use when the user types /factory run, /factory run <n>, or /factory followed by anything else (a question, what needs them, feedback, a rejection, an answer to a factory question, or a new feature). The session that runs it is the single orchestrator for every job.
 ---
 
 # auto-factory orchestrator
@@ -116,10 +116,14 @@ the implementer. Otherwise `head -1 round-<N>/checks.md`:
   round limit is reached, `job.py advance <id> needs-human`. Otherwise go to
   **implement** with the gate-failure message. No reviewer runs on a red gate.
 
-**review.** Spawn every reviewer in `agents.reviewers` **in one message**:
-`subagent_type` `reviewer-<r>`, `model` from the map, prompt
-`<header> Review round <N>.` **Wait for all of them.** Each time one finishes,
-run `job.py sync <id>`. When all have finished, `head -1` each
+**review.** For each reviewer `<r>` in `agents.reviewers` the task words are
+`Review round <N>.` When N > 1, first run
+`python factory/bin/job.py reviewed <id> <r>`; if it prints
+`round-<M> <sha>`, append `Previous review: round <M> at <sha>.` so that
+reviewer looks only at what changed (`none`: nothing to append). Then spawn
+them all **in one message**: `subagent_type` `reviewer-<r>`, `model` from the
+map, prompt `<header> <task words>`. **Wait for all of them.** Each time one
+finishes, run `job.py sync <id>`. When all have finished, `head -1` each
 `round-<N>/review-<r>.md`:
 - all `VERDICT: PASS`: `job.py advance <id> approve`, then spawn `approver`
   with `<header> PR: #<pr>. Final round: <N>.` Go to **approve**.
@@ -163,7 +167,8 @@ A job is done for this run at `merged`, `rejected`, `needs-info` or
 - `implement`: new implementer named `implementer-<id>`, told it is resuming.
 - `gate`: run the gate.
 - `review`: spawn only reviewers whose `round-<N>/review-<r>.md` is missing or
-  has no `VERDICT:` first line; then continue as in **review**.
+  has no `VERDICT:` first line, with the same task words as in **review**
+  (including `Previous review: …`); then continue as in **review**.
 - `approve`: respawn the approver.
 - `merging`: `job.py merge <id>`.
 

@@ -53,9 +53,12 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual(job["cost"]["by_agent"]["implementer"], 0.01)
         self.assertIn("Waiting on people", out)
         prompt = (self.sb.jobdir(job["id"]) / "runs" / "003-implementer.prompt.md").read_text(encoding="utf-8")
-        self.assertTrue(prompt.startswith(f"Job: {job['id']}. Job folder: "))
-        self.assertIn("Role: implementer.\nImplement round 1.", prompt)
-        self.assertIn("## How this run works", prompt)
+        # unchanging instructions first (cacheable), the job block last
+        self.assertTrue(prompt.startswith("## How this run works"))
+        job_block = prompt.split("\n## This job\n", 1)[1]
+        self.assertTrue(job_block.strip().startswith(f"Job: {job['id']}. Job folder: "))
+        self.assertIn("Role: implementer.\nImplement round 1.", job_block)
+        self.assertIsNone(self.runs(job["id"])[0]["tokens"])  # the fake tool reports no usage
         self.assertNotIn("hooks:", prompt)              # frontmatter is stripped
 
     def test_auto_merge_and_prompt_file_mode(self):
@@ -80,9 +83,24 @@ class RunnerTest(unittest.TestCase):
 
     def test_review_changes_then_pass(self):
         self.make(plan={"1": {"intake": "ACCEPT medium ui", "reviews": {"ux": ["CHANGES", "PASS"]}}})
+        tasks = self.sb.tmp / "tasks.tsv"
+        self.sb.env["FAKE_AGENT_TASKS"] = str(tasks)
         self.sb.add_issue(1, "Status filter")
         self.run_factory()
         job = self.sb.jobjson("001-status-filter")
+        # round 2 reviewers are told what they already reviewed, so they check only the changes
+        asked = [l.split("\t") for l in tasks.read_text(encoding="utf-8").splitlines()]
+        r1 = [t for role, t in asked if role == "reviewer-ux" and t.startswith("Review round 1.")]
+        r2 = [t for role, t in asked if role == "reviewer-ux" and t.startswith("Review round 2.")]
+        self.assertEqual(r1, ["Review round 1."])
+        self.assertRegex(r2[0], r"^Review round 2\. Previous review: round 1 at [0-9a-f]{40}\.$")
+        round1_commit = (self.sb.jobdir(job["id"]) / "round-1" / "checks.md").read_text(encoding="utf-8").split("COMMIT: ")[1].split()[0]
+        self.assertIn(round1_commit, r2[0])
+        self.assertEqual(self.sb.job("reviewed", job["id"], "ux").stdout.strip(), f"round-1 {round1_commit}")
+        # every run of a role sends the same instructions first: a cacheable prefix
+        prompts = sorted((self.sb.jobdir(job["id"]) / "runs").glob("*-reviewer-ux.prompt.md"))
+        prefixes = {p.read_text(encoding="utf-8").split("\n## This job\n")[0] for p in prompts}
+        self.assertEqual((len(prompts), len(prefixes)), (2, 1))
         self.assertEqual(job["round"], 2)
         self.assertEqual(job["stage"], "needs-human")  # medium risk: held for a human merge
         roles = [r["role"] for r in self.runs(job["id"])]
@@ -137,6 +155,16 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual(failure_summary(codex_tail, 1), "ERROR: exceeded retry limit, last status: 429 Too Many Requests, request id: x")
         self.assertEqual(failure_summary("all good\nbut then it stopped\n", 1), "but then it stopped")
         self.assertEqual(failure_summary("12,345\n", 2), "exited 2")
+
+    def test_token_count(self):
+        import sys
+        sys.path.insert(0, str(HERE.parent / "template" / "factory"))
+        from factorylib.harness import token_count
+        self.assertEqual(token_count("text", "…\nERROR: x\ntokens used\n15,807\n"), 15807)
+        self.assertEqual(token_count("text", "tokens used: 1,234\n"), 1234)
+        self.assertIsNone(token_count("text", "nothing here\n"))
+        usage = '{"result": "ok", "usage": {"input_tokens": 10, "output_tokens": 5, "cache_read_input_tokens": 100}}'
+        self.assertEqual(token_count("claude-json", usage), 115)
 
     def test_per_role_tool(self):
         self.make()

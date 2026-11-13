@@ -23,12 +23,17 @@ def git(cwd, *args):
 
 def main():
     prompt = Path(sys.argv[1]).read_text(encoding="utf-8") if len(sys.argv) > 1 else sys.stdin.read()
-    head = prompt.splitlines()[0]
+    lines = prompt.splitlines()
+    at = next(i for i, l in enumerate(lines) if l.startswith("Job: "))  # the "## This job" block, at the end
+    head = lines[at]
     folder = Path(re.search(r"Job folder: (.+?)/\. Main checkout", head).group(1))
     worktree = Path(re.search(r"Worktree: (.+?)\. Branch:", head).group(1))
     issue = re.search(r"Issue: #(\d+)\.", head).group(1)
     role = re.search(r"^Role: ([\w-]+)\.$", prompt, re.M).group(1)
-    task = prompt.splitlines()[2]
+    task = lines[at + 2]
+    if os.environ.get("FAKE_AGENT_TASKS"):  # tests can see exactly what each agent was asked
+        with open(os.environ["FAKE_AGENT_TASKS"], "a", encoding="utf-8") as f:
+            f.write(f"{role}\t{task}\n")
     plan_file = os.environ.get("FAKE_AGENT_PLAN")
     plan = json.loads(Path(plan_file).read_text(encoding="utf-8")).get(issue, {}) if plan_file else {}
     state_file = folder / f"fake-calls-{role}.txt"  # one file per role: reviewers run in parallel

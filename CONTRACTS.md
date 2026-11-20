@@ -18,6 +18,7 @@ Paths below are relative to the **target repo** the factory is installed in
 <repo>/factory/bin/shot.py                  signed-in screenshots (optional Playwright)
 <repo>/factory/bin/serve.py                 dashboard + settings server (127.0.0.1)
 <repo>/factory/bin/run.py                   tool-neutral runner: drives any agent CLI (Claude, Codex, DeepSeek…)
+<repo>/factory/bin/put.py                   writes files / applies apply_patch-style patches from stdin, for agent tools without an editor
 <repo>/factory/factorylib/                  shared Python (stdlib only)
 <repo>/factory/dashboard/index.html         dashboard single-page app
 <repo>/factory/seed-users.json              test-only users per role (optional)
@@ -211,9 +212,9 @@ archive <job>            zip a terminal job into factory/archive/
   "labels": {"queue": "factory", "needs_info": "factory:needs-info", "needs_human": "factory:needs-human"},
   "models": {"intake": "fable", "spec-writer": "opus", "implementer": "opus", "approver": "opus"},
   "routing": {
-    "low":    {"code": "haiku",  "auto_merge": false},
-    "medium": {"code": "sonnet", "auto_merge": false},
-    "high":   {"code": "sonnet", "auto_merge": false}
+    "low":    {"code": "haiku",  "auto_merge": false, "light_review": false},
+    "medium": {"code": "sonnet", "auto_merge": false, "light_review": false},
+    "high":   {"code": "sonnet", "auto_merge": false, "light_review": false}
   },
   "surface_reviewers": {
     "ui": {"ux": "sonnet", "ui": "haiku"},
@@ -314,6 +315,29 @@ branch (`git diff origin/<base>...HEAD`).
 `run.py` sends the role's instructions **first** and the job-specific block
 **last** (`## This job`: header line, `Role:`, task line, optional port), so
 the unchanging part can be cached by the provider.
+
+After the job block comes `## Job files`: a `### <name>` heading and a fenced
+copy, as of the run's start, of each job file the role reads. The fence is
+longer than any backtick run in the file.
+
+| Role | Files copied in |
+|---|---|
+| intake | issue.md |
+| spec-writer | issue.md, intake.md |
+| implementer | spec.md |
+| reviewer-* | spec.md, impl.md |
+| approver | spec.md, impl.md |
+
+issue.md is labelled as quoted data from the issue's author. A file over
+20,000 characters is not copied; its heading says to read it from the job
+folder. The preamble names `put.py`
+(`python <repo>/factory/bin/put.py write <file>` or `… patch`, text on stdin)
+for tools without a working file editor. On Windows it adds that the shell is
+PowerShell. When `rg` isn't on PATH, the runner puts the newest ripgrep from
+Codex's install folder in front of the agent's PATH.
+
+`routing.<risk>.light_review` (low and medium only): route.py drops the `ux`
+reviewer when the `ui` reviewer is also on the job. Every other reviewer stays.
 
 ## Two ways to run the agents
 

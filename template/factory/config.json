@@ -17,9 +17,9 @@
     "approver": "opus"
   },
   "routing": {
-    "low": { "code": "haiku", "auto_merge": false },
-    "medium": { "code": "sonnet", "auto_merge": false },
-    "high": { "code": "sonnet", "auto_merge": false }
+    "low": { "code": "haiku", "auto_merge": false, "light_review": false },
+    "medium": { "code": "sonnet", "auto_merge": false, "light_review": false },
+    "high": { "code": "sonnet", "auto_merge": false, "light_review": false }
   },
   "surface_reviewers": {
     "ui": { "ux": "sonnet", "ui": "haiku" },

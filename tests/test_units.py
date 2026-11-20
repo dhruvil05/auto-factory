@@ -167,6 +167,20 @@ class RouteTest(unittest.TestCase):
         self.assertEqual(reason, "data changes always go to a human")
         self.assertTrue(human)
 
+    def test_light_review_skips_ux_for_ui_work(self):
+        c = cfg()
+        c["routing"]["low"]["light_review"] = True
+        reviewers, *_ = route.plan(c, {"risk": "low", "surfaces": ["ui"]})
+        self.assertEqual(reviewers, {"code": "haiku", "ui": "haiku"})
+        reviewers, *_ = route.plan(c, {"risk": "low", "surfaces": ["ui", "security"]})
+        self.assertEqual(reviewers, {"code": "haiku", "ui": "haiku", "security": "opus"})  # serious areas stay
+        reviewers, *_ = route.plan(c, {"risk": "medium", "surfaces": ["ui"]})                # off by default
+        self.assertEqual(reviewers, {"code": "sonnet", "ux": "sonnet", "ui": "haiku"})
+        c["routing"]["high"]["light_review"] = True
+        self.assertTrue(any("light_review can't be on" in e for e in config.validate(c)))
+        c["routing"]["high"]["light_review"] = "yes"
+        self.assertTrue(any("light_review must be true or false" in e for e in config.validate(c)))
+
     def test_high_risk(self):
         _, auto, reason, _ = route.plan(cfg(), {"risk": "high", "surfaces": []})
         self.assertEqual((auto, reason), (False, "high risk always goes to a human"))

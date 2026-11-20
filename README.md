@@ -40,7 +40,7 @@ template/                      what gets installed
   .claude/skills/factory/      the /factory orchestrator (Claude Code)
   .agents/skills/factory/      the $factory skill (Codex), which drives run.py
   .claude/agents/              intake, spec-writer, implementer, approver, 6 reviewers
-  factory/bin/                 job, gate, route, env, port, shot, serve, run (python …/x.py)
+  factory/bin/                 job, gate, route, env, port, shot, serve, run, put (python …/x.py)
   factory/factorylib/          shared Python, standard library only
   factory/dashboard/           the dashboard page (served by serve.py)
   factory/config.json          defaults; edited from the dashboard afterwards
@@ -92,6 +92,21 @@ in `factory/archive/prompts-<time>/` first).
 - **Re-reviews look only at what changed** since the commit a reviewer last saw.
 - **Quick exits:** a reviewer whose area the diff doesn't touch passes at once.
 - **Cache-friendly prompts:** instructions first, job details last.
+- **Job files come with the prompt:** each role gets current copies of the
+  job files it reads (issue and intake for the spec writer, the spec for the
+  implementer, spec and impl.md for reviewers and the approver), so it doesn't
+  spend turns finding and reading them. Files over 20,000 characters are left
+  to read in parts.
+- **No turns lost to file writing or the shell:** agents whose tool has no
+  working editor (Codex with a model it doesn't know, such as DeepSeek) pipe
+  text to `factory/bin/put.py`, which writes files or applies apply_patch-style
+  patches and keeps CRLF files CRLF. On Windows the preamble says the shell is
+  PowerShell, and the runner puts Codex's bundled `rg` on the agents' PATH
+  when ripgrep isn't installed.
+- **Light review (opt-in, per risk):** Settings → Review & merge → Light review.
+  UI work then gets the UI reviewer only, not the UX reviewer too: one agent
+  run less per round. Security, data and access reviewers always stay, and
+  high risk always gets every reviewer.
 - **Token counts** per agent run (Claude Code and Codex) on the job page.
 
 ## Run it
@@ -181,6 +196,10 @@ instructions stay in `.claude/agents/*.md` for every tool. The runner adds a
 short tool-neutral preamble, runs the gate's dry run after the implementer,
 pushes and opens the PR itself when a sandbox blocks the network, and
 reverts code changes made by agents that should only read.
+
+Two installs save many agent turns: ripgrep (`rg`, agents search with it
+first) and, for UI projects, Playwright for `shot.py`'s screenshots. Without
+Playwright, agents improvise screenshots with slow workarounds.
 
 Give each tool the permissions its role needs and no more. The implementer
 edits and commits in its worktree; everyone else writes one file in the job

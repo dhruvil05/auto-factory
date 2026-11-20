@@ -114,10 +114,41 @@ Both tools get the same commands from their own skill file:
 | Type | `/factory run`, `/factory run 12`, `/factory <anything>` | `$factory run`, `$factory run 12`, `$factory <anything>` (or pick it in `/skills`) |
 | Who runs the agents | Claude Code's own subagents | `factory/bin/run.py`, started by the skill |
 
-In Codex the skill hands `run` to `run.py`, which needs network access and
-starts other agent processes, so Codex asks you to approve running it outside
-its sandbox. If your Codex session can't keep a long command running, run
-`python factory/bin/run.py` in a terminal instead; the result is the same.
+In Codex the skill hands `run` to `run.py --watch`, which needs network access
+and starts other agent processes, so Codex asks you to approve running it
+outside its sandbox. If your Codex session can't keep a long command running,
+press **Start** in the dashboard or run `python factory/bin/run.py --watch` in
+a terminal instead; the result is the same.
+
+## Keep it running: the runner
+
+You don't have to start the factory again after each piece of feedback. Press
+**Start** in the dashboard's top bar (or run `python factory/bin/run.py
+--watch`). The runner then:
+
+- picks up your feedback, answers to intake's questions, resumed or retried
+  jobs and new `factory` issues within seconds (GitHub every minute,
+  `runner.poll_seconds`);
+- runs each job on its own, so one job waiting for you or failing never stops
+  the others;
+- keeps going until you press **Stop** (finish the steps in progress) or
+  **Stop now** (end the running agents), or run `python factory/bin/run.py stop`.
+
+Each job's page has **Pause** (finish the current step, then hold), **Stop
+now** (end its running agent; the step starts over when you resume),
+**Resume**, and **Retry** for a job the runner stopped. `/factory run` in
+Claude Code keeps watching too (with `job.py wait`), and refuses to start
+while a runner is on, so two orchestrators never drive the same jobs.
+
+## Images in issues
+
+Screenshots and mockups pasted into an issue reach the agents: when a job
+starts, the images in the issue (and in the author's comments) are downloaded
+with your `gh` login into the job folder (`attachments/`), and `issue.md`
+points at them. Intake, the spec writer, the implementer and the UI/UX
+reviewers are told to open them. Only GitHub-hosted images are fetched (PNG,
+JPEG, GIF, WebP; at most 20, 10 MB each); the dashboard shows them under
+"Images from the issue" on the job page.
 The Codex skill only runs when you name it (`allow_implicit_invocation: false`
 in its `agents/openai.yaml`), because it opens and merges pull requests.
 
@@ -128,8 +159,10 @@ The factory doesn't need Claude Code. `run.py` is a script version of the
 
 ```bash
 python factory/bin/run.py doctor    # check settings and that the tools are installed
-python factory/bin/run.py           # every open `factory` issue
+python factory/bin/run.py --watch   # keep working the queue until stopped (or press Start in the dashboard)
+python factory/bin/run.py           # one pass: until nothing can move without you
 python factory/bin/run.py 12        # one issue
+python factory/bin/run.py stop      # stop a running runner (add --now to end running agents)
 ```
 
 Pick the tool in the dashboard (Settings → Agent tools) or in `config.json`

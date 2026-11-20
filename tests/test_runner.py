@@ -109,6 +109,34 @@ class RunnerTest(unittest.TestCase):
         self.assertIn("Round 1 reviews are in round-1/", self.runs(job["id"])[
             [i for i, r in enumerate(roles) if r == "implementer"][1]]["task"])
 
+    def test_runner_commits_for_an_implementer_that_cannot_write_git(self):
+        self.make(plan={"1": {"no_git": "ready"}})
+        self.sb.add_issue(1, "Status filter")
+        out = self.run_factory().stdout
+        job = self.sb.jobjson("001-status-filter")
+        self.assertEqual(job["stage"], "needs-human", out)       # approved, held for a human merge
+        self.assertTrue(job["held"])
+        self.assertIn("committed the implementer's changes", out)
+        wt = job["worktree"]
+        files = self.sb.git(wt, "show", "--name-only", "--format=%s", "HEAD").stdout.split()
+        self.assertIn("app.txt", files)
+        self.assertIn("test_new.py", files)
+        self.assertNotIn(".env", files)                          # the job's .env is never committed
+        self.assertEqual(self.sb.git(wt, "status", "--porcelain").stdout.strip(), "?? .env")
+        self.assertEqual([r["role"] for r in self.runs(job["id"])].count("implementer"), 1)
+
+    def test_blocked_only_by_git_is_not_sent_to_a_human(self):
+        self.make(plan={"1": {"no_git": "blocked"}})
+        self.sb.add_issue(1, "Status filter")
+        out = self.run_factory().stdout
+        job = self.sb.jobjson("001-status-filter")
+        self.assertTrue(job["held"], out)                         # went on through gate, review and approve
+        self.assertEqual(job["round"], 1)
+        roles = [r["role"] for r in self.runs(job["id"])]
+        self.assertEqual(roles.count("implementer"), 2)            # one re-check after the runner's commit
+        self.assertIn("the runner committed your changes", self.runs(job["id"])[roles.index("implementer") + 1]["task"])
+        self.assertTrue((self.sb.jobdir(job["id"]) / "impl.md").read_text(encoding="utf-8").startswith("STATUS: READY"))
+
     def test_reviewer_editing_code_is_reverted(self):
         self.make(plan={"1": {"reviewer_edits_code": True}})
         self.sb.add_issue(1, "Thing")

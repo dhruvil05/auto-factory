@@ -147,19 +147,33 @@ A job is done for this run at `merged`, `rejected`, `needs-info` or
 
 ## /factory run
 
-1. `python factory/bin/job.py preflight`. If it fails, stop and report the
+1. `python factory/bin/run.py status`. If it says `runner: on`, stop: the
+   runner (started from the dashboard or a terminal) already works the
+   queue, and two orchestrators must never drive the same jobs. Say so.
+2. `python factory/bin/job.py preflight`. If it fails, stop and report the
    failing step: nothing starts on a red base. If `factory/PAUSE` exists, stop
    and say the factory is paused (`job.py unpause` or the dashboard resumes it).
-2. `python factory/bin/job.py queue`. Each row is
+3. `python factory/bin/job.py queue`. Each row is
    `action issue job stage note`. Start every `resume` and `new` row and
-   nothing else; `hold` waits for a slot, `wait` waits for a person, `skip` is
-   ignored. Don't judge issues yourself. For `new`: `job.py create <issue>`
-   prints the id; go to **intake**.
-3. Whenever a job finishes, run `job.py queue` again and start any new
+   nothing else; `hold` waits for a slot or is paused, `wait` waits for a
+   person, `skip` is ignored. Don't judge issues yourself. For `new`:
+   `job.py create <issue>` prints the id; go to **intake**.
+4. Whenever a job finishes, run `job.py queue` again and start any new
    `resume`/`new` rows you aren't already running.
-4. When nothing is running or queued: `job.py summary <ids touched>`, then
+5. When nothing is running or queued: `job.py summary <ids touched>`, then
    list what waits on a human: escalated or held PRs, BLOCKED jobs, and
    questions waiting on authors.
+6. **Keep watching**, so feedback, answers and new issues need no new
+   `/factory run`: start `python factory/bin/job.py wait` as a background
+   command and end your turn with one line ("watching for feedback, answers
+   and new issues"). When it exits 0 it printed rows to start: go to step 3.
+   When it exits 3 (nothing yet after 9 minutes), start it again. Stop
+   watching when the user says stop or `factory/PAUSE` exists.
+
+**Paused jobs.** A person can pause one job from the dashboard. Before every
+step of a job, check `paused` in its `job.json`: when it is set, the job is
+done for this run (the queue shows it as `hold … paused`). A "stop now" can't
+end your subagents; the job stops after the agent you are waiting on.
 
 **Resuming after a crash** (a `resume` row; state is in the files):
 - `intake`: respawn intake. `spec`: respawn spec-writer.
@@ -174,7 +188,7 @@ A job is done for this run at `merged`, `rejected`, `needs-info` or
 
 ## /factory run <n>
 
-Same preflight and pause check. If `job.py queue` has a row for issue n,
+Same runner, preflight and pause checks. If `job.py queue` has a row for issue n,
 resume that job from its stage; if it shows `hold`, say no slot is free;
 otherwise `job.py create <n>` and go to **intake**. End with
 `job.py summary <n>`.
@@ -219,7 +233,8 @@ still changes only through the scripts.
   <the feature, verbatim>
   EOF
   ```
-- **Pause / resume**: `job.py pause` / `job.py unpause`.
+- **Pause / resume**: everything: `job.py pause` / `job.py unpause`. One job:
+  `job.py pause <n>` / `job.py unpause <n>`. A stopped job: `job.py retry <n>`.
 
 ## Guardrails
 

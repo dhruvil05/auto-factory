@@ -138,6 +138,13 @@ def main(argv):
         print("  Kept your versions of these (add --prompts to replace the prompts with the new ones):")
         for rel in kept:
             print(f"    {rel}")
+    runner_lock = target / "factory" / "jobs" / "_runner" / ".lock"
+    if a.upgrade and copied and runner_lock.exists():
+        sys.path.insert(0, str(TEMPLATE / "factory"))
+        from factorylib import lock  # noqa: E402
+        if lock.is_held(runner_lock):
+            print("\n  A runner is working in this project with the old code. In the dashboard press Stop\n"
+                  "  (then Stop now if it waits on an agent), and Start again to use this update.")
     has_profile = (target / "AGENTS.md").exists() and PROFILE_HEADING in (target / "AGENTS.md").read_text(encoding="utf-8")
     if not has_profile:
         print(f"\n  No Factory profile yet. Add one so the agents know this project:\n"

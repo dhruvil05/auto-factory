@@ -14,6 +14,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 
@@ -41,7 +42,9 @@ def main():
     state_file.write_text(str(calls[role]), encoding="utf-8")
     reply = ""
 
-    if role in plan.get("tool_error", []):
+    if calls[role] == 1 and role in plan.get("sleep_once", {}):  # a long first run, to pause or stop it
+        time.sleep(plan["sleep_once"][role])
+    if role in plan.get("tool_error", []) or (calls[role] == 1 and role in plan.get("tool_error_once", [])):
         print(json.dumps({"type": "result", "result": "Failed to authenticate: session expired",
                           "total_cost_usd": 0, "is_error": True}))
         sys.exit(1)
@@ -56,6 +59,28 @@ def main():
     elif role == "spec-writer":
         (folder / "spec.md").write_text("# Fake spec\n\n> Issue\n\n## Summary\n- a spec\n", encoding="utf-8")
         reply = "SPEC: Fake spec"
+    elif role == "implementer" and plan.get("no_git"):
+        # A sandboxed tool (like Codex) that can't write .git: change files, never commit.
+        n = int(re.search(r"Implement round (\d+)", task).group(1))
+        if plan["no_git"] == "blocked" and calls[role] == 2:  # the runner committed; re-check the status
+            text = (folder / "impl.md").read_text(encoding="utf-8").replace("STATUS: BLOCKED", "STATUS: READY", 1)
+            (folder / "impl.md").write_text(text.split("## Blocked")[0], encoding="utf-8")
+            reply = "STATUS: READY"
+        else:
+            app = worktree / "app.txt"
+            app.write_text(app.read_text(encoding="utf-8") + "sandboxed change\n", encoding="utf-8")
+            (worktree / "test_new.py").write_text("def test_it():\n    assert True\n", encoding="utf-8")
+            (worktree / ".env").write_text("SECRET=local-only\n", encoding="utf-8")
+            if plan["no_git"] == "blocked":
+                (folder / "impl.md").write_text(
+                    f"STATUS: BLOCKED\n\n# Implementation\n\n## Summary\n- round {n}\n\n## Blocked\n"
+                    "- fatal: Unable to create '.git/worktrees/x/index.lock': Permission denied, so no commit "
+                    "can be created.\n", encoding="utf-8")
+                reply = "STATUS: BLOCKED"
+            else:
+                (folder / "impl.md").write_text(f"STATUS: READY\n\n# Implementation\n\n## Summary\n- round {n}\n",
+                                                encoding="utf-8")
+                reply = "STATUS: READY"
     elif role == "implementer":
         n = int(re.search(r"Implement round (\d+)", task).group(1))
         fail_file = worktree / "FAIL"

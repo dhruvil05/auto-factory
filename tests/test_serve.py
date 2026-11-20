@@ -126,6 +126,38 @@ class ServeTest(unittest.TestCase):
         self.assertEqual(status, 409)
         self.assertIn("not needs-human", out["error"])
 
+    def test_job_control(self):
+        status, out = self.call(f"/api/jobs/{self.job_id}/control", {"action": "pause"})
+        self.assertEqual(status, 200, out)
+        self.assertFalse(out["job"]["paused"]["now"])
+        self.assertEqual(self.call("/api/state")[1]["slots"]["used"], 0)   # a paused job holds no slot
+        status, out = self.call(f"/api/jobs/{self.job_id}/control", {"action": "resume"})
+        self.assertEqual(status, 200, out)
+        self.assertIsNone(out["job"]["paused"])
+        self.assertEqual(self.call(f"/api/jobs/{self.job_id}/control", {"action": "retry"})[0], 409)  # nothing stopped
+        self.assertEqual(self.call(f"/api/jobs/{self.job_id}/control", {"action": "explode"})[0], 400)
+        stopped = self.sb.jobdir(self.job_id) / "runs" / "stopped.md"
+        stopped.parent.mkdir(parents=True, exist_ok=True)
+        stopped.write_text("STOPPED\nWHEN: 2026-11-12T10:00:00Z\n\nintake (claude) failed: not signed in\n", encoding="utf-8")
+        job = next(j for j in self.call("/api/state")[1]["jobs"] if j["id"] == self.job_id)
+        self.assertEqual(job["stopped"], "intake (claude) failed: not signed in")
+        self.assertEqual(self.call(f"/api/jobs/{self.job_id}/control", {"action": "retry"})[0], 200)
+        self.assertFalse(stopped.exists())
+
+    def test_runner_status_and_issue_images(self):
+        status, data = self.call("/api/runner")
+        self.assertEqual(status, 200)
+        self.assertFalse(data["runner"]["running"])
+        self.assertFalse(self.call("/api/state")[1]["runner"]["running"])
+        img = self.sb.jobdir(self.job_id) / "attachments" / "image-1.jpg"
+        img.parent.mkdir(parents=True, exist_ok=True)
+        img.write_bytes(b"\xff\xd8\xff\xe0fake jpeg")
+        req = urllib.request.Request(f"http://127.0.0.1:{self.port}/api/jobs/{self.job_id}/file?path=attachments/image-1.jpg")
+        req.add_header("X-Factory-Token", self.token)
+        with urllib.request.urlopen(req, timeout=30) as r:
+            self.assertEqual(r.headers.get_content_type(), "image/jpeg")
+            self.assertEqual(r.read(), b"\xff\xd8\xff\xe0fake jpeg")
+
     def test_dashboard_page(self):
         status, body = self.call("/")
         if (self.sb.repo / "factory/dashboard/index.html").exists():

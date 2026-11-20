@@ -6,6 +6,7 @@ notices when the scripts start using something new.
 
 import json
 import os
+import re
 import sys
 
 STATE = os.environ["FAKE_GH_STATE"]
@@ -45,6 +46,13 @@ def main(a):
     out = None
     if a[:2] == ["api", "user"]:
         out = OPERATOR
+    elif a[0] == "api":  # GitHub's rendered HTML of an issue or its comments (for signed image links)
+        m = next((re.match(r"repos/\{owner\}/\{repo\}/issues/(\d+)(/comments)?", x) for x in a[1:]
+                  if x.startswith("repos/")), None)
+        issue = s["issues"].get(m.group(1)) if m else None
+        if issue is not None:
+            out = ([{"body_html": c.get("body_html", "")} for c in issue["comments"]] if m.group(2)
+                   else {"body_html": issue.get("body_html", "")})
     elif a[0] == "issue":
         if a[1] == "list":
             label = opt(a, "--label")

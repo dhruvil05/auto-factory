@@ -55,6 +55,7 @@
     "harness": "claude",
     "role_harness": {},
     "agent_timeout_minutes": 60,
+    "poll_seconds": 60,
     "harnesses": {
       "claude": {
         "cmd": "claude -p {MODEL_FLAG} --permission-mode dontAsk --allowedTools \"{TOOLS}\" --output-format json",

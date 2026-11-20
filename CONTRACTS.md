@@ -22,6 +22,8 @@ Paths below are relative to the **target repo** the factory is installed in
 <repo>/factory/dashboard/index.html         dashboard single-page app
 <repo>/factory/seed-users.json              test-only users per role (optional)
 <repo>/factory/jobs/<job-id>/               runtime state (gitignored)
+<repo>/factory/jobs/<job-id>/attachments/   images from the issue (image-<k>.<ext>), for the agents
+<repo>/factory/jobs/_runner/                the runner's lock, state.json, STOP request, runner.log
 <repo>/factory/config-history/              previous settings (gitignored)
 <repo>/.worktrees/<job-id>/                 each job's worktree (gitignored)
 ```
@@ -147,12 +149,31 @@ Last 80 lines of <step>: ```…```
   "port": 5550, "db": "backoffice_app_job_45",
   "cost": {"usd": 1.38, "by_agent": {"intake": 0.21}, "partial": false},
   "started": "2026-11-12T10:00:00Z", "ended": null,
+  "paused": null,
   "history": [{"at": "…", "from": "intake", "to": "spec"}]
 }
 ```
 
 `held: true` = the approver said APPROVE but auto-merge is off for this job, so
 it waits for a human merge. `cost.partial` = some model had no price in config.
+`paused: {"at": "<iso>", "now": bool}` = a person paused this one job (`now`:
+its running agent is ended at once); null otherwise. A paused job holds no
+slot, the queue shows it as `hold … paused`, and no orchestrator moves it.
+
+## Images in the issue
+
+`write_issue_md` (on `create` and when intake runs again) downloads every
+image in the issue body and in trusted comments into `attachments/`
+(`image-1.png`, …) and points `issue.md` at them: inside the quoted text an
+image becomes `[image (alt): attachments/image-1.png]`, or
+`[image: <url> — couldn't download: <why>]`. A `## Images` section at the end
+lists the saved files by absolute path. Rules: GitHub-hosted links only
+(`github.com`, `*.githubusercontent.com`, plus hosts in
+`$FACTORY_IMAGE_HOSTS`); private-repo images through the signed links in
+GitHub's rendered HTML (`gh api … Accept: application/vnd.github.full+json`),
+else the link with `gh auth token` sent to github.com only; at most 20
+images, 10 MB each; PNG, JPEG, GIF and WebP only (checked by content). A
+failed download never stops the job.
 
 ## job.py commands
 
@@ -169,6 +190,9 @@ sync <job>               refresh gate, reviews, cost from files
 summary [<job>…]         table
 preflight                run the gate on origin/<base> in a scratch worktree
 pause | unpause          create/remove factory/PAUSE
+pause <job> [--now]      set job.json paused (with --now the runner ends its running agent)
+unpause <job> | retry <job>   clear paused and runs/stopped.md: a runner picks the job up again
+wait [--timeout <s>]     block until queue has new/resume rows (prints them) or exit 3 (default 540 s)
 archive <job>            zip a terminal job into factory/archive/
 ```
 
@@ -295,11 +319,31 @@ the unchanging part can be cached by the provider.
 
 1. **Inside Claude Code**: `/factory run` (the skill) spawns the agents as
    Claude Code subagents.
-2. **Any agent CLI**: `python factory/bin/run.py [<issue>|doctor]` is a script
-   orchestrator. It starts each agent as its own command from config `runner`,
-   checks the file the agent had to write, and moves the job on with the same
-   scripts. The state machine and files are identical, so a job can switch
-   between the two between runs.
+2. **Any agent CLI**: `python factory/bin/run.py [<issue>] [--watch]` is a script
+   orchestrator (also `stop [--now]`, `status`, `doctor`). It starts each agent
+   as its own command from config `runner`, checks the file the agent had to
+   write, and moves the job on with the same scripts. The state machine and
+   files are identical, so a job can switch between the two between runs.
+
+Only one orchestrator works on a project at a time: run.py holds the lock
+`factory/jobs/_runner/.lock`, and the skill checks `run.py status` first.
+
+**Watch mode** (`--watch`; the dashboard's Start runs this): the runner keeps
+going until stopped. Each job runs in its own thread; one job waiting,
+pausing or stopping never holds up the others. It re-reads the queue within
+seconds of a person acting on this machine (feedback, reject, pause, resume,
+retry, settings) and every `runner.poll_seconds` for GitHub (answers to
+intake questions, merges, new issues). A stopped job stays stopped until
+`retry` (or `unpause`) removes its `runs/stopped.md`. Without `--watch` it
+ends when nothing can move without a person, as before; with `<issue>
+--watch` it ends when that issue is merged or rejected.
+
+**Stopping.** `factory/jobs/_runner/STOP` holds `graceful` (start no new step;
+finish the ones running) or `now` (also end running agents). A job paused
+with `--now` has its agent ended within a second (the process tree is
+killed); the run record says `"stopped": true` and the step runs again on
+resume. `state.json`: `{pid, beat, started, watch, issue, phase, active,
+stopped, exit}`, rewritten every few seconds.
 
 Runner config (inside config.json):
 
@@ -308,6 +352,7 @@ Runner config (inside config.json):
   "harness": "claude",                 // tool for every role…
   "role_harness": {"intake": "codex"}, // …unless a role names its own
   "agent_timeout_minutes": 60,
+  "poll_seconds": 60,
   "harnesses": {
     "<name>": {
       "cmd": "…",                // one line; placeholders below
@@ -329,14 +374,18 @@ the same `FACTORY_*` env vars as checks, plus `FACTORY_ROLE`.
 The prompt is `<header line>`, `Role: <role>.`, the task line (e.g.
 `Implement round 2. The gate failed: …`, `Review round 1.`), optionally
 `Your port: <p>.`, then a tool-neutral preamble and the agent file's body
-without frontmatter. The runner, not the agent, guarantees: the gate's dry run
+without frontmatter. The runner, not the agent, guarantees: a commit of what
+the implementer left uncommitted (sandboxed tools such as Codex can't write
+`.git`; `.env` is never included; a BLOCKED whose only reason is git access
+gets the commit plus one more implementer turn to re-check its status instead
+of going to a human), the gate's dry run
 after the implementer (one retry), push + draft PR when the agent couldn't,
 one retry when an agent didn't leave its file, reverting code changes by
 read-only roles, and stopping when anything touches the main checkout.
 
 Runner files in the job folder: `runs/NNN-<role>.prompt.md`, `.log`,
 `.json` (`{role, harness, model, task, started, seconds, exit, timed_out,
-cost_usd, reply, error}`), `runs/warnings.md`, `runs/stopped.md`.
+stopped, cost_usd, tokens, reply, error, log}`), `runs/warnings.md`, `runs/stopped.md`.
 `cost_usd` (from `claude-json` output) is added to the job's cost.
 
 ## Dashboard API (`serve.py`, 127.0.0.1 only)
@@ -347,9 +396,9 @@ of `127.0.0.1:<port>` or `localhost:<port>`. JSON in, JSON out.
 
 ```
 GET  /                              dashboard/index.html
-GET  /api/state                     {project, paused, config, config_dirty, jobs: [job.json…], slots: {used, total}, preflight}
+GET  /api/state                     {project, paused, config, config_dirty, jobs: [job.json + stopped], slots: {used, total}, preflight, runner}
 GET  /api/jobs/<id>                 {job, files: [{path, first_line, summary: [..], size}]}
-GET  /api/jobs/<id>/file?path=<p>   {path, content}       (path must stay inside the job folder)
+GET  /api/jobs/<id>/file?path=<p>   {path, content}, or the bytes for .png/.jpg/.gif/.webp (path must stay inside the job folder)
 POST /api/config                    {config} → 200 {config} | 400 {errors: [..]} | 409 {error} (a job is in gate/merging)
 GET  /api/config/history            {entries: [{name, at}]}
 GET  /api/config/diff               {diff}   (git diff of factory/config.json)
@@ -358,7 +407,17 @@ POST /api/preflight                 202 {status: "running"}
 GET  /api/preflight                 {status: idle|running|done, result: {gate, commit, at, steps: [{name, result, seconds}], rules: [{name, result}]}|null}
 POST /api/jobs/<id>/feedback        {text} → {job}
 POST /api/jobs/<id>/reject          {text} → {job}
+POST /api/jobs/<id>/control         {action: pause|stop|resume|retry} → {job, message} | 409 {error}
+GET  /api/runner                    {runner, log}   (log: the last 200 lines of runner.log)
+POST /api/runner                    {action: start|stop|stop-now} → {runner, message} | 409 {error}
 ```
+
+`runner` = `{running, stopping, pid, started, beat, watch, issue, phase,
+active, stopped}` while one runs, else `{running: false, last}`. In
+`/api/state` each job also has `stopped` (the first line of the reason in
+`runs/stopped.md`, or null). Start launches `run.py --watch` in its own
+process group with output to `factory/jobs/_runner/runner.log`; it keeps
+running when the dashboard stops.
 
 `project` = `{name, repo, base_branch}`. `preflight` in `/api/state` is the
 last result or null.

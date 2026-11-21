@@ -148,7 +148,7 @@ Last 80 lines of <step>: ```…```
   "always_human": true, "held": true,
   "gate": "PASS", "reviews": {"code": "PASS", "data": "PASS"},
   "port": 5550, "db": "backoffice_app_job_45",
-  "cost": {"usd": 1.38, "by_agent": {"intake": 0.21}, "partial": false},
+  "cost": {"usd": 1.38, "by_agent": {"intake": 0.21}, "partial": false, "tokens": {…}, "agents": {…}},
   "started": "2026-11-12T10:00:00Z", "ended": null,
   "paused": null,
   "history": [{"at": "…", "from": "intake", "to": "spec"}]
@@ -254,8 +254,12 @@ archive <job>            zip a terminal job into factory/archive/
   `FACTORY_PORT`, `FACTORY_DB`, `FACTORY_WORKTREE`.
 - `login_path`: optional dev-only login URL template, e.g. `/dev-login?as={ROLE}`.
   When empty, `shot.py` signs in with `factory/seed-users.json`.
-- `prices_usd_per_mtok`: `{"<model id>": {"input", "output", "cache_write_5m",
-  "cache_write_1h", "cache_read"}}`. Empty = cost shows as partial.
+- `prices_usd_per_mtok`: `{"<model id>": {"input", "output", "cache_read"?,
+  "cache_write_5m"?, "cache_write_1h"?}}`, USD per million tokens. `input` and
+  `output` are required; a cache price left out costs the same as input. The
+  model id is the one the tool really used (shown on the job page), matched
+  exactly or as a prefix. Edited in Settings, General, Prices. A model without
+  a price shows its tokens but no cost.
 - Locked: `factory/*` and `.claude/*` can't be removed from `protected_paths`.
 
 ## Project profile (makes the agents fit any project)
@@ -409,8 +413,44 @@ read-only roles, and stopping when anything touches the main checkout.
 
 Runner files in the job folder: `runs/NNN-<role>.prompt.md`, `.log`,
 `.json` (`{role, harness, model, task, started, seconds, exit, timed_out,
-stopped, cost_usd, tokens, reply, error, log}`), `runs/warnings.md`, `runs/stopped.md`.
-`cost_usd` (from `claude-json` output) is added to the job's cost.
+stopped, cost_usd, tokens, usage, reply, error, log}`), `runs/warnings.md`, `runs/stopped.md`.
+
+`usage` is `{input, cached, cache_write, output, model}` or null, and `tokens`
+is `input + output` when it is known:
+
+- `input` counts all input tokens, cached ones included. `model` is the model
+  the tool really used.
+- **Claude Code:** comes from the `usage` block of its JSON result.
+- **Codex:** comes from its session file,
+  `$CODEX_HOME/sessions/YYYY/MM/DD/rollout-*-<session id>.jsonl` (default
+  `~/.codex`), via the last `token_count` event. Codex's own "tokens used" line
+  leaves out cached input.
+- The harness key `usage` (`auto`, `codex` or `none`) says whether to read Codex
+  sessions; `auto` reads them when the command runs `codex`.
+- Records written before this field existed are filled in once from the session
+  their log names.
+
+While an agent runs, `runs/NNN-<role>.live` (`{role, harness, model, started,
+usage, beat}`) is rewritten every 5 seconds. For Codex it carries the session's
+running totals, found by its start time and the job and role in its task. It
+is deleted when the run ends. A file not rewritten for 30 seconds is ignored.
+
+Job cost (`job.json` `cost`, recomputed by `serve.py` on each refresh):
+
+```json
+{"usd": 0.41, "exact_usd": 0.412, "partial": false, "by_agent": {"implementer": 0.16},
+ "tokens": {"input": 8164965, "cached": 8001792, "output": 102497, "total": 8267462},
+ "agents": {"implementer": {"runs": 1, "tokens": 3656571, "input": 3622704, "cached": 3583872,
+            "output": 33867, "usd": 0.1608, "priced": true, "model": "deepseek-flash", "exact": true}},
+ "live": [{"role": "reviewer-ui", "started": "…", "tokens": 412000, "usd": 0.02, "model": "deepseek-flash"}],
+ "unpriced": []}
+```
+
+- A run's cost is `cost_usd` when the tool reports one; otherwise it is worked
+  out from `usage` and the model's price.
+- `partial` means a finished run has neither.
+- `exact: false` means some runs only had a token count that leaves out cached
+  input.
 
 ## Dashboard API (`serve.py`, 127.0.0.1 only)
 

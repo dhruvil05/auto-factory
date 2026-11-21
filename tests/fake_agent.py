@@ -6,7 +6,9 @@ Behaviour can be steered per issue with $FAKE_AGENT_PLAN (a JSON file):
   {"<issue>": {"intake": "ACCEPT low none", "dry_fail_once": true,
                "reviews": {"code": ["CHANGES", "PASS"]}, "approve": "APPROVE",
                "reviewer_edits_code": true, "silent": ["spec-writer"]}}
-It prints a Claude-style JSON result so the runner can record a cost.
+It prints a Claude-style JSON result so the runner can record a cost. With
+$FAKE_CODEX_HOME set it acts like Codex instead: it keeps a session file under
+<that>/sessions/YYYY/MM/DD/ with running token counts and prints plain text.
 """
 
 import json
@@ -15,7 +17,35 @@ import re
 import subprocess
 import sys
 import time
+import uuid
 from pathlib import Path
+
+
+class CodexSession:
+    """A Codex-like session file: the task first, then token_count events with running totals."""
+
+    def __init__(self, home, prompt_text):
+        self.id = str(uuid.uuid4())
+        now = time.localtime()
+        d = Path(home) / "sessions" / time.strftime("%Y/%m/%d", now)
+        d.mkdir(parents=True, exist_ok=True)
+        self.file = d / f"rollout-{time.strftime('%Y-%m-%dT%H-%M-%S', now)}-{self.id}.jsonl"
+        self.turns = 0
+        self.write({"type": "session_meta", "payload": {"session_id": self.id, "model": "fake-flash"}})
+        self.write({"type": "turn_context", "payload": {"model": "fake-flash"}})
+        self.write({"type": "event_msg", "payload": {"type": "item_completed", "item": {
+            "type": "UserMessage", "content": [{"type": "input_text", "text": prompt_text}]}}})
+
+    def write(self, entry):
+        with self.file.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(entry) + "\n")
+
+    def turn(self):
+        self.turns += 1
+        n = self.turns
+        self.write({"type": "event_msg", "payload": {"type": "token_count", "info": {"total_token_usage": {
+            "input_tokens": 10000 * n, "cached_input_tokens": 8000 * n, "cache_write_input_tokens": 0,
+            "output_tokens": 500 * n, "reasoning_output_tokens": 100 * n, "total_tokens": 10500 * n}}}})
 
 
 def git(cwd, *args):
@@ -41,6 +71,10 @@ def main():
     calls = {role: (int(state_file.read_text()) if state_file.exists() else 0) + 1}
     state_file.write_text(str(calls[role]), encoding="utf-8")
     reply = ""
+    codex = (CodexSession(os.environ["FAKE_CODEX_HOME"], sys.argv[1] if len(sys.argv) > 1 else prompt)
+             if os.environ.get("FAKE_CODEX_HOME") else None)
+    if codex:
+        codex.turn()
 
     if calls[role] == 1 and role in plan.get("sleep_once", {}):  # a long first run, to pause or stop it
         time.sleep(plan["sleep_once"][role])
@@ -111,6 +145,10 @@ def main():
         decision = plan.get("approve", "APPROVE")
         (folder / "decision.md").write_text(f"{decision}\n\n## Summary\n- fake decision\n", encoding="utf-8")
         reply = decision
+    if codex:
+        codex.turn()  # two turns in all: 20,000 input (16,000 cached) and 1,000 output
+        print(f"OpenAI Codex (fake)\nsession id: {codex.id}\nworking\ntokens used\n5,000\n{reply}")
+        return
     print(json.dumps({"type": "result", "result": f"working…\n{reply}", "total_cost_usd": 0.01, "is_error": False}))
 
 

@@ -132,6 +132,8 @@ button.status:hover{background:var(--hover);color:var(--ink)}
 .imgview{display:block;max-width:100%;height:auto;margin:0 auto;border:1px solid var(--line);border-radius:8px;background:var(--card)}
 .netbar{background:var(--fail-bg);color:var(--red);border-top:1px solid var(--red-line);font-size:13px}
 .netbar>div{padding:8px 32px}
+.oldbar{background:var(--sand);color:var(--sand-ink2);border-top:1px solid var(--sand-line);font-size:13px}
+.oldbar>div{padding:8px 32px}
 .fixturebar{background:var(--accent-bg);color:var(--accent-ink);font-size:13px}
 .fixturebar>div{padding:8px 32px}
 
@@ -249,10 +251,44 @@ details[open]>summary{margin-bottom:8px}
 .facts dd{margin:2px 0 12px;font-size:13px;overflow-wrap:anywhere}
 .facts dd:last-child{margin-bottom:0}
 .costrow{display:flex;justify-content:space-between;gap:8px;font-size:13px}
+/* prices: a list like the check steps; on a narrow card each row stacks (model, then the three prices) */
+.prices{display:flex;flex-direction:column}
+.prow{display:grid;grid-template-columns:minmax(160px,1.3fr) repeat(3,minmax(110px,1fr)) 36px;gap:10px 12px;align-items:center;padding:10px 24px;border-top:1px solid var(--line2)}
+.prow.head{padding-top:12px;padding-bottom:4px;font-size:12px;font-weight:600;color:var(--mute)}
+.prices:not(:has(#price-rows .prow)) .prow.head{display:none}
+.prices:has(#price-rows .prow) .pempty{display:none}
+.pempty{margin:0;padding:14px 24px 18px;border-top:1px solid var(--line2);font-size:13px;color:var(--mute)}
+.pcell{display:flex;flex-direction:column;gap:4px;min-width:0}
+.pcell .field{width:100%;min-width:0}
+.plbl{display:none;font-size:12px;font-weight:600;color:var(--mute)}
+.pmoney{display:flex;align-items:center;gap:6px;min-width:0}
+.phint{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+@container (max-width:620px){
+  .prow{grid-template-columns:repeat(3,minmax(0,1fr)) 36px;padding:14px 16px}
+  .prow.head{display:none}
+  .prow .pmodel{grid-column:1 / 4}
+  .prow .prm{grid-column:4;grid-row:1;align-self:end}
+  .plbl{display:block}
+}
+.tokstat{display:grid;grid-template-columns:repeat(auto-fit,minmax(64px,1fr));gap:8px;margin:0}
+.tokstat>div{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px;min-width:0}
+.tokstat dt{font-size:11px;color:var(--mute);margin-bottom:2px}
+.tokstat dd{margin:0;font-size:15px;font-weight:600}
+.costtbl{width:100%;border-collapse:collapse;font-size:13px}
+.costtbl th,.costtbl td{padding:6px 0;border-bottom:1px solid var(--line2);text-align:left;vertical-align:top}
+.costtbl thead th{font-size:11px;font-weight:500;color:var(--mute);padding-top:0}
+.costtbl tbody tr:last-child th,.costtbl tbody tr:last-child td{border-bottom:0}
+.costtbl tbody th{font-weight:500;padding-right:8px}
+.costtbl tbody th .mute{display:block;font-weight:400;overflow-wrap:anywhere}
+.costtbl .num{text-align:right;padding-left:10px;white-space:nowrap}
+.livecost{display:flex;align-items:center;gap:8px;font-size:13px;padding:8px 10px;border-radius:8px;background:var(--accent-bg)}
+.livedot{flex:none;width:8px;height:8px;border-radius:999px;background:var(--accent);animation:livepulse 1.6s ease-in-out infinite}
+@keyframes livepulse{50%{opacity:.35}}
+@media (prefers-reduced-motion:reduce){.livedot{animation:none}}
 .costrow.total{font-size:14px;font-weight:700;padding-top:8px;border-top:1px solid var(--line2)}
 
 /* job page */
-.jpage{display:flex;flex-direction:column;gap:28px;max-width:1400px}
+.jpage{display:flex;flex-direction:column;gap:28px}
 .back{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:500;color:var(--mute);text-decoration:none;align-self:flex-start}
 .back:hover{color:var(--ink)}
 .jhead{display:flex;flex-direction:column;gap:12px;min-width:0}
@@ -273,16 +309,24 @@ details[open]>summary{margin-bottom:8px}
 .track li.stop .tdot{background:var(--warn-ink);border-color:var(--warn-ink);box-shadow:0 0 0 4px var(--warn-bg)}
 .track li.fail .tdot{background:var(--red);border-color:var(--red);box-shadow:0 0 0 4px var(--fail-bg)}
 .track li.now,.track li.stop,.track li.fail{color:var(--ink);font-weight:600}
-/* decision first in the markup (and on phones); on wide screens it sits above the side panel */
-.jcols{display:grid;grid-template-columns:minmax(0,1fr) 340px;grid-template-rows:auto 1fr;gap:16px 24px;align-items:start}
-.jmain{grid-column:1;grid-row:1 / span 2;min-width:0;display:flex;flex-direction:column;gap:12px}
-#jd-decision{grid-column:2;grid-row:1;min-width:0}
+/* The page uses the whole window; the side panel grows with it (340px up to 480px).
+   Row 1 holds the "What happened" heading, so the side panel starts level with the steps card.
+   The decision box comes first on phones; on wide screens it sits above the side panel. */
+.jcols{display:grid;grid-template-columns:minmax(0,1fr) clamp(340px,26vw,480px);grid-template-rows:auto auto 1fr;gap:12px 24px;align-items:start}
+.track{max-width:none}
+@media (min-width:1600px){.wrap.jpage{padding-left:48px;padding-right:48px}.jcols{column-gap:32px}}
+.jsteps-h{grid-column:1;grid-row:1;display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 16px;min-width:0}
+.jsteps-h h2{font-size:15px;font-weight:600;flex:1 1 auto}
+.jsteps-act{display:flex;gap:14px;font-size:13px}
+.jmain{grid-column:1;grid-row:2 / span 2;min-width:0;display:flex;flex-direction:column;gap:12px}
+#jd-decision{grid-column:2;grid-row:2;min-width:0}
 #jd-decision:empty{display:none}
-.jside{grid-column:2;grid-row:2;min-width:0;display:flex;flex-direction:column;gap:16px}
-.jcols:has(#jd-decision:empty) .jside{grid-row:1 / span 2}
+.jside{grid-column:2;grid-row:3;min-width:0;display:flex;flex-direction:column;gap:16px}
+.jcols:has(#jd-decision:empty) .jside{grid-row:2 / span 2}
 @media (max-width:900px){
   .jcols{grid-template-columns:minmax(0,1fr);grid-template-rows:none}
-  .jmain,#jd-decision,.jside,.jcols:has(#jd-decision:empty) .jside{grid-column:1;grid-row:auto}
+  .jsteps-h,.jmain,#jd-decision,.jside,.jcols:has(#jd-decision:empty) .jside{grid-column:1;grid-row:auto}
+  #jd-decision{order:-1}
 }
 .panel{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:24px;box-shadow:var(--shadow);min-width:0}
 .panel>h2,.jmain>h2{font-size:15px;font-weight:600}
@@ -297,6 +341,17 @@ details[open]>summary{margin-bottom:8px}
 .tl-head{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;min-height:22px}
 .tl-head h3{font-size:14px;font-weight:600}
 .tl-meta{margin-left:auto;font-size:12px;color:var(--mute);white-space:nowrap}
+/* each step folds: the head (a summary) toggles it; closed, it shows a one-line preview */
+.tl-fold>summary.tl-head{list-style:none;cursor:pointer;color:var(--ink);font-size:inherit;border-radius:6px;margin:-2px -6px;padding:2px 6px}
+.tl-fold>summary.tl-head::-webkit-details-marker{display:none}
+.tl-fold>summary.tl-head:hover{background:var(--hover)}
+.tl-fold>summary.tl-head:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.tl-fold[open]>summary.tl-head{margin-bottom:0}
+.tl-chev{flex:none;width:7px;height:7px;border-right:2px solid var(--mute);border-bottom:2px solid var(--mute);transform:rotate(-45deg);transition:transform .12s;margin:0 2px 0 -2px}
+.tl-fold[open] .tl-chev{transform:rotate(45deg)}
+.tl-peek{flex:1 1 100%;min-width:0;font-size:12px;font-weight:400;color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tl-fold[open] .tl-peek{display:none}
+@media (prefers-reduced-motion:reduce){.tl-chev{transition:none}}
 .tl-body{display:flex;flex-direction:column;gap:8px;margin-top:6px}
 .tl-body .bul{font-size:13px;line-height:19px;color:var(--ink2);gap:2px}
 .tl-files{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px}
@@ -352,17 +407,24 @@ details[open]>summary{margin-bottom:8px}
 .cost-total b{font-size:22px;font-weight:700}
 
 /* settings */
-.settings{display:grid;grid-template-columns:190px minmax(0,1fr);gap:40px;align-items:start}
+.settings{display:grid;grid-template-columns:200px minmax(0,1fr);gap:40px;align-items:start}
 .snav-wrap{position:sticky;top:84px;display:flex;flex-direction:column;gap:2px}
 .snav{display:block;font-size:14px;color:var(--mute);text-decoration:none;padding:8px 12px;border-radius:8px;white-space:nowrap}
 .snav:hover{background:var(--hover);color:var(--ink)}
 .snav[aria-current="page"]{background:var(--accent-bg);color:var(--accent-ink);font-weight:600}
-.settings-main{min-width:0;max-width:1040px;display:flex;flex-direction:column;gap:20px}
+.settings-main{min-width:0;display:flex;flex-direction:column;gap:20px}
+/* cards flow two per row on wide screens; lists and tables (.wide) and everything that isn't a card span the row */
+.secgrid{display:grid;grid-template-columns:minmax(0,1fr);gap:20px;align-items:start}
+.secgrid>*{min-width:0}
+@media (min-width:1600px){.secgrid{grid-template-columns:repeat(2,minmax(0,1fr))}.secgrid>:not(.sgroup),.secgrid>.sgroup.wide{grid-column:1 / -1}}
+@media (min-width:1600px){.wrap.settings{padding-left:48px;padding-right:48px}}
 .intro{display:flex;flex-direction:column;gap:6px}
 .intro h1{font-size:24px;font-weight:700;letter-spacing:-.01em}
 .intro p{margin:0;font-size:14px;line-height:21px;color:var(--mute);max-width:720px}
 .intro code,.help code{font-size:12px;background:var(--sunk);border-radius:6px;padding:1px 6px}
-.sgroup{background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);min-width:0}
+.sgroup{background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);min-width:0;container-type:inline-size}
+/* a narrow card stacks each setting's label above its control, whatever the window width */
+@container (max-width:620px){.srow{grid-template-columns:minmax(0,1fr);gap:8px}.srow-l{padding-top:0}}
 .sgroup-h{display:flex;align-items:center;gap:12px;padding:16px 24px;border-bottom:1px solid var(--line2)}
 .sgroup-h h2{font-size:15px;font-weight:600;flex:1 1 auto;display:flex;flex-wrap:wrap;align-items:center;gap:8px}
 .sgroup-f{padding:14px 24px;border-top:1px solid var(--line2);font-size:12px;line-height:18px;color:var(--mute)}
@@ -405,7 +467,9 @@ details[open]>summary{margin-bottom:8px}
 .switch-row label{font-size:14px;line-height:21px}
 @media (max-width:860px){
   .settings{grid-template-columns:minmax(0,1fr);gap:16px}
-  .snav-wrap{position:static;flex-direction:row;overflow-x:auto;gap:4px;margin:0 -16px;padding:0 16px 4px;-webkit-overflow-scrolling:touch}
+  .snav-wrap{position:static;display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:6px}
+  .snav-wrap .snav{text-align:center;border:1px solid var(--line);padding:8px 6px;white-space:normal;line-height:18px;display:flex;align-items:center;justify-content:center}
+  .snav-wrap .snav[aria-current="page"]{border-color:transparent}
   .srow{grid-template-columns:minmax(0,1fr);gap:8px;padding:16px}
   .srow-l{padding-top:0}
   .sgroup-h,.sgroup-f{padding-left:16px;padding-right:16px}
@@ -515,7 +579,7 @@ button.lg-l:hover{filter:brightness(.97);text-decoration:underline}
   .tabs{order:3;width:100%;gap:24px;min-height:44px;border-top:1px solid var(--line2)}
   .hdr-actions{gap:8px}
   .hdr-actions .status span{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
-  .netbar>div,.fixturebar>div{padding:8px 16px}
+  .netbar>div,.fixturebar>div,.oldbar>div{padding:8px 16px}
   .snav-wrap{max-width:none;flex-basis:100%;position:static}
   .bhead h1{font-size:20px}
   .bhead{align-items:flex-start}
@@ -635,6 +699,7 @@ var app = {
   historyErr: null,
   pollBusy: false,
   jobBusy: false,
+  keep: {},  /* folds the user opened or closed, by job and step */
   pauseBusy: false,
   runnerBusy: false,
   ctlBusy: false,
@@ -838,6 +903,27 @@ function surfacesOf(j) { return arr(obj(j.intake).surfaces).filter(function (s) 
 function surfaceChips(j) { return surfacesOf(j).map(function (s) { return chip(s, 'info'); }).join(''); }
 function roundOf(j) { return num(j.round); }
 function jobCost(j) { return num(obj(j.cost).usd); }
+function jobTokens(j) { return num(obj(obj(j.cost).tokens).total); }
+function fmtTok(n) {
+  n = num(n);
+  if (n === null) return '—';
+  if (n < 1000) return String(n);
+  if (n < 1e6) return (n / 1e3).toFixed(n < 1e4 ? 1 : 0) + 'K';
+  return (n / 1e6).toFixed(n < 1e8 ? 2 : 1) + 'M';
+}
+function fmtCost(v) {
+  v = num(v);
+  if (v === null) return '—';
+  return v > 0 && v < 0.01 ? '<$0.01' : '$' + v.toFixed(2);
+}
+/* "$0.21 · 1.66M tokens": the cost when a price is known, the tokens when the tool reported them */
+function costLine(j) {
+  var c = obj(j.cost), usd = num(c.usd), tok = jobTokens(j), bits = [];
+  var noPrice = arr(c.unpriced).length > 0 && !usd;
+  if (!noPrice && usd !== null) bits.push(fmtCost(c.exact_usd !== undefined ? c.exact_usd : usd) + (c.partial ? ' (partial)' : ''));
+  if (tok) bits.push(fmtTok(tok) + ' tokens');
+  return bits.join(' · ');
+}
 function verdictCls(v) {
   v = str(v).toUpperCase().trim();
   if (!v || v === 'PENDING' || v === '…') return 'pend';
@@ -1061,6 +1147,9 @@ function updateHeader() {
   var bars = '';
   if (app.fixture) bars += '<div class="fixturebar"><div>Fixture mode: showing <span class="mono">' + esc(app.fixture) + '</span>. Read-only, nothing is sent.</div></div>';
   if (app.stateErr) bars += '<div class="netbar" role="alert"><div>' + esc(app.stateErr) + ' Retrying every 5 seconds.</div></div>';
+  /* a serve.py older than this page doesn't report it at all: that is out of date too */
+  else if (app.state && !app.fixture && (app.state.server_outdated || !('server_outdated' in app.state))) bars += '<div class="oldbar" role="status"><div>The factory was updated after this dashboard server started, so some numbers come from its old code. ' +
+    'In the terminal running <span class="mono">serve.py</span>, press Ctrl+C, start it again and open the new link.</div></div>';
   setHTML(nb, bars);
 }
 
@@ -1121,11 +1210,12 @@ function boardHTML() {
   var waiting = jobs.filter(function (j) { return WAITING.indexOf(j.stage) >= 0; });
   var finished = jobs.filter(function (j) { return RUNNING.indexOf(j.stage) < 0 && WAITING.indexOf(j.stage) < 0; });
   var merged = jobs.filter(function (j) { return j.stage === 'merged'; }).length;
-  var total = 0, partial = false;
+  var total = 0, partial = false, tokens = 0;
   jobs.forEach(function (j) {
-    var c = jobCost(j);
+    var c = num(obj(j.cost).exact_usd) !== null ? num(obj(j.cost).exact_usd) : jobCost(j);
     if (c !== null) total += c;
     if (obj(j.cost).partial) partial = true;
+    tokens += jobTokens(j) || 0;
   });
   var rank = function (j) { return j.stage === 'needs-human' ? (j.held ? 0 : 1) : 2; };
   waiting.sort(function (a, b) { return rank(a) - rank(b) || (toMs(a.started) || 0) - (toMs(b.started) || 0); });
@@ -1138,7 +1228,8 @@ function boardHTML() {
       '<li><b>' + running.length + '</b> in progress</li>' +
       '<li' + (waiting.length ? ' class="hot"' : '') + '><b>' + waiting.length + '</b> waiting on you</li>' +
       '<li><b>' + merged + '</b> merged</li>' +
-      '<li' + (partial ? ' title="Some models have no price set, so this is a lower bound"' : '') + '><b>' + fmtUsd(total) + '</b> spent' + (partial ? ' (partial)' : '') + '</li>' +
+      '<li' + (partial ? ' title="Some models have no price set, so this is a lower bound"' : '') + '><b>' + fmtCost(total) + '</b> spent' + (partial ? ' (partial)' : '') + '</li>' +
+      (tokens ? '<li title="' + esc(tokens.toLocaleString()) + ' tokens"><b>' + fmtTok(tokens) + '</b> tokens</li>' : '') +
     '</ul></div>' +
     '<div class="seg" role="group" aria-label="View">' +
       '<button type="button" class="seg-b" id="view-board" data-action="set-view" data-view="board" aria-pressed="' + (view === 'board') + '">' + ICON.cols + '<span>Board</span></button>' +
@@ -1314,7 +1405,7 @@ function finishedRow(j) {
   if (j.pr !== undefined && j.pr !== null) facts.push('PR #' + j.pr);
   var r = roundOf(j);
   if (r) facts.push(plural(r, 'round'));
-  if (jobCost(j) !== null) facts.push(fmtUsd(jobCost(j)) + (obj(j.cost).partial ? ' (partial)' : ''));
+  if (costLine(j)) facts.push(costLine(j));
   return '<a class="jrow" id="row-' + idSafe(j.id) + '" href="' + esc(jobHref(j)) + '">' +
     '<div class="jrow-main">' + rowTitle(j) + (facts.length ? '<div class="jrow-sub">' + esc(facts.join(' · ')) + '</div>' : '') + '</div>' +
     '<div class="jrow-side">' + chip(res, cls) + '<span class="when">' + esc(ago(j.ended || j.started)) + '</span></div>' + ICON.chev + '</a>';
@@ -1333,8 +1424,11 @@ function jobLayoutHTML() {
     '<div id="jd-head"><p class="mute" role="status">Loading the job…</p></div>' +
     '<div id="jd-runner" class="stack" style="gap:12px"></div>' +
     '<div class="jcols" id="jd-cols" hidden>' +
+      '<div class="jsteps-h"><h2 id="h-steps">What happened</h2><div class="jsteps-act">' +
+        '<button type="button" class="linkbtn" data-action="steps-open" data-open="1">Expand all</button>' +
+        '<button type="button" class="linkbtn" data-action="steps-open" data-open="0">Collapse all</button></div></div>' +
       '<div id="jd-decision"></div>' +
-      '<section aria-labelledby="h-steps" class="jmain"><h2 id="h-steps">What happened</h2><div id="jd-steps"></div></section>' +
+      '<section aria-labelledby="h-steps" class="jmain"><div id="jd-steps"></div></section>' +
       '<aside class="jside" aria-label="Job details">' +
         '<section aria-labelledby="h-facts" class="card side-card" id="jd-facts"></section>' +
         '<section aria-labelledby="h-cost" class="card side-card" id="jd-cost"></section>' +
@@ -1506,7 +1600,7 @@ function jobHeadHTML(j) {
   var facts = [];
   if (roundOf(j)) facts.push('Round ' + roundOf(j) + (num(j.round_limit) ? ' of ' + j.round_limit : ''));
   facts.push(elapsed(j));
-  facts.push(fmtUsd(jobCost(j)) + (obj(j.cost).partial ? ' (partial)' : ''));
+  if (costLine(j)) facts.push(costLine(j));
   meta.push('<span>' + esc(facts.join(' · ')) + '</span>');
   return '<div class="jhead"><h1><span class="ref mono">' + esc(issueRef(j)) + '</span>' + esc(jobTitle(j)) + '</h1>' +
     '<div class="jmeta">' + meta.join('') + '</div>' + trackHTML(j) + jobControlsHTML(j) + '</div>';
@@ -1581,6 +1675,8 @@ function costFor(j, key) {
   return null;
 }
 function modelFor(j, key) {
+  var used = obj(obj(j.cost).agents), cands = [key, 'reviewer-' + key];
+  for (var i = 0; i < cands.length; i++) if (obj(used[cands[i]]).model) return str(used[cands[i]].model);  /* what really ran */
   var ag = obj(j.agents);
   if (typeof ag[key] === 'string') return ag[key];
   var m = str(key).match(/^(?:reviewer-|review-)?(code|security|ux|ui|data|access)(?:-reviewer)?$/);
@@ -1590,7 +1686,7 @@ function modelFor(j, key) {
 }
 function agentMeta(j, key, stage, times) {
   var parts = [], m = modelFor(j, key), c = costFor(j, key);
-  if (m) parts.push(cap(m));
+  if (m) parts.push(MODELS.indexOf(m) >= 0 ? cap(m) : m);  /* a tier (Opus) or the model that ran (deepseek-flash) */
   if (stage && times[stage]) parts.push(fmtDur(times[stage]));
   if (c !== null) parts.push(fmtUsd(c));
   return parts.join(' · ');
@@ -1720,14 +1816,30 @@ function bulletsHTML(b) {
 }
 function chkId(path) { return 'chk-' + idSafe(path); }
 
+/* Open or closed folds (steps, step results) per job, kept across the 5-second refreshes. */
+function keepKey(name) { return (app.route.id || '') + '|' + name; }
+function keepOpen(name, dflt) {
+  var v = app.keep[keepKey(name)];
+  return typeof v === 'boolean' ? v : dflt;
+}
+/* Collapsed by default, except what needs a look: a failure or warning, and the latest step. */
+function stepOpenByDefault(s, i, n) { return i === n - 1 || s.cls === 'fail' || s.cls === 'warn'; }
+function stepPeek(s) {
+  if (s.kind === 'reviews') return s.subs.map(function (x) { return revLabel(x.r) + ' ' + str(x.verdict || '…').toLowerCase(); }).join(' · ');
+  return s.bullets && s.bullets.length ? s.bullets[0] : '';
+}
+
 function stepsHTML(steps, files) {
   var h = '';
   if (!steps.length) h += '<p class="quiet">No agent has written a file for this job yet.</p>';
   else {
-    h += '<div class="panel"><ol class="tl">' + steps.map(function (s) {
+    h += '<div class="panel"><ol class="tl">' + steps.map(function (s, i) {
+      var open = keepOpen('step:' + s.name, stepOpenByDefault(s, i, steps.length)), peek = stepPeek(s);
       var out = '<li class="tl-item"><span class="tl-dot ' + esc(s.cls || 'pend') + '" aria-hidden="true"></span>' +
-        '<div class="tl-head"><h3>' + esc(s.name) + '</h3>' + (s.verdict ? chip(s.verdict, s.cls, 'sm') : '') +
-        (s.meta ? '<span class="tl-meta">' + esc(s.meta) + '</span>' : '') + '</div><div class="tl-body">';
+        '<details class="tl-fold" data-keep="' + esc('step:' + s.name) + '"' + (open ? ' open' : '') + '>' +
+        '<summary class="tl-head"><span class="tl-chev" aria-hidden="true"></span><h3>' + esc(s.name) + '</h3>' + (s.verdict ? chip(s.verdict, s.cls, 'sm') : '') +
+        (s.meta ? '<span class="tl-meta">' + esc(s.meta) + '</span>' : '') +
+        (peek ? '<span class="tl-peek">' + mdInline(esc(peek)) + '</span>' : '') + '</summary><div class="tl-body">';
       if (s.kind === 'reviews') {
         out += s.subs.map(function (x) {
           return '<div class="tl-sub"><div class="tl-sub-h"><strong>' + esc(revLabel(x.r)) + '</strong>' + (x.model ? '<span class="mute">' + esc(x.model) + '</span>' : '') +
@@ -1739,11 +1851,11 @@ function stepsHTML(steps, files) {
       }
       if (s.checksPath) {
         var failed = /FAIL/i.test(str(s.verdict));
-        out += '<details class="fold"' + (failed ? ' open' : '') + '><summary>Step results</summary>' +
+        out += '<details class="fold" data-keep="' + esc('results:' + s.name) + '"' + (keepOpen('results:' + s.name, failed) ? ' open' : '') + '><summary>Step results</summary>' +
           '<div class="chk" id="' + chkId(s.checksPath) + '">' + checksBlockHTML(s.checksPath, s.checksSize) + '</div></details>';
       }
       if (s.files && s.files.length) out += '<div class="tl-files">' + s.files.map(fileLink).join('') + '</div>';
-      return out + '</div></li>';
+      return out + '</div></details></li>';
     }).join('') + '</ol></div>';
   }
   return h + filesPanelHTML(files);
@@ -1798,7 +1910,10 @@ function runRow(n, set) {
   var bits = [];
   if (rec.harness) bits.push(esc(rec.harness) + (rec.model && rec.model !== '(tool default)' ? ' · ' + esc(rec.model) : ''));
   if (num(rec.seconds) !== null) bits.push(esc(fmtSecs(rec.seconds)));
-  if (num(rec.tokens) !== null) bits.push(esc(rec.tokens.toLocaleString()) + ' tokens');
+  var u = obj(rec.usage);
+  if (u.model && rec.harness && (!rec.model || rec.model === '(tool default)')) bits[0] += ' · ' + esc(u.model);
+  if (num(rec.tokens) !== null) bits.push(esc(fmtTok(rec.tokens)) + ' tokens' +
+    (num(u.input) ? ' (' + Math.round(100 * (num(u.cached) || 0) / u.input) + '% cached)' : ''));
   if (num(rec.cost_usd) !== null) bits.push(esc(fmtUsd(rec.cost_usd)));
   var status = !set.json ? '' : !rec.harness ? chip('…', 'pend', 'sm') : rec.timed_out ? chip('timed out', 'fail', 'sm') : failed ? chip('failed', 'fail', 'sm') : chip('ok', 'pass', 'sm');
   function btn(f, label) { return f ? '<button type="button" class="linkbtn" data-action="open-file" data-path="' + esc(f.path) + '">' + label + '</button>' : ''; }
@@ -2013,23 +2128,51 @@ function factsHTML(j) {
 }
 
 function costHTML(j) {
-  var c = obj(j.cost), by = obj(c.by_agent);
+  var c = obj(j.cost), by = obj(c.by_agent), agents = obj(c.agents), tk = obj(c.tokens);
   var order = ['intake', 'spec-writer', 'implementer'];
-  var keys = Object.keys(by).sort(function (a, b) {
-    var ia = order.indexOf(a), ib = order.indexOf(b);
-    if (a === 'approver') ia = 99; if (b === 'approver') ib = 99;
-    if (ia < 0) ia = 50; if (ib < 0) ib = 50;
-    return ia - ib || (a < b ? -1 : a > b ? 1 : 0);
+  function rank(a) { var i = order.indexOf(a); return a === 'approver' ? 99 : i < 0 ? 50 : i; }
+  var keys = uniq(Object.keys(agents).concat(Object.keys(by))).sort(function (a, b) {
+    return rank(a) - rank(b) || (a < b ? -1 : a > b ? 1 : 0);
   });
-  var h = '<div class="cost-total"><h2 id="h-cost">Cost</h2><b class="mono">' + fmtUsd(num(c.usd) !== null ? c.usd : 0) + '</b></div>';
-  if (keys.length) {
-    h += '<div class="stack" style="gap:8px">' + keys.map(function (k) {
-      var m = modelFor(j, k);
-      return '<div class="costrow"><span>' + esc(agentLabel(k)) + (m ? ' <span class="mute">· ' + esc(cap(m)) + '</span>' : '') + '</span><span class="mono">' + fmtUsd(num(by[k])) + '</span></div>';
-    }).join('') + '</div>';
+  var unpriced = arr(c.unpriced), usd = num(c.exact_usd) !== null ? num(c.exact_usd) : num(c.usd);
+  var noPrice = unpriced.length > 0 && !usd;
+  var h = '<div class="cost-total"><h2 id="h-cost">Cost</h2><b class="mono"' + (noPrice ? ' title="No price set for ' + esc(unpriced.join(', ')) + '"' : '') + '>' +
+    (noPrice ? '—' : fmtCost(usd !== null ? usd : 0)) + '</b></div>';
+  arr(c.live).forEach(function (r) {
+    r = obj(r);
+    h += '<div class="livecost" role="status"><span class="livedot" aria-hidden="true"></span><span><b>' + esc(agentLabel(r.role)) + '</b> working' +
+      (num(r.tokens) ? ' · ' + esc(fmtTok(r.tokens)) + ' tokens so far' : '') + (num(r.usd) !== null ? ' · ' + esc(fmtCost(r.usd)) : '') + '</span></div>';
+  });
+  if (num(tk.total)) {
+    var cachedPct = num(tk.input) ? Math.round(100 * (num(tk.cached) || 0) / tk.input) : null;
+    h += '<dl class="tokstat">' +
+      '<div><dt>Tokens</dt><dd class="mono" title="' + esc(tk.total.toLocaleString()) + '">' + esc(fmtTok(tk.total)) + '</dd></div>' +
+      (num(tk.input) ? '<div><dt>Input</dt><dd class="mono" title="' + esc(tk.input.toLocaleString()) + '">' + esc(fmtTok(tk.input)) + '</dd></div>' : '') +
+      (cachedPct !== null ? '<div><dt>Cached</dt><dd class="mono" title="' + esc((tk.cached || 0).toLocaleString()) + ' input tokens read from the provider\'s cache (cheaper)">' + cachedPct + '%</dd></div>' : '') +
+      (num(tk.output) ? '<div><dt>Output</dt><dd class="mono" title="' + esc(tk.output.toLocaleString()) + '">' + esc(fmtTok(tk.output)) + '</dd></div>' : '') +
+      '</dl>';
   }
-  if (c.partial) h += '<div class="small" style="color:var(--warn-ink)">Partial: some calls have no price (set prices in config.json, or the agent tool doesn\'t report cost).</div>';
-  h += '<div class="small mute">API-equivalent price, not your bill.</div>';
+  if (keys.length) {
+    var inexact = false;
+    h += '<table class="costtbl"><thead><tr><th scope="col">Agent</th><th scope="col" class="num">Runs</th><th scope="col" class="num">Tokens</th><th scope="col" class="num">Cost</th></tr></thead><tbody>' +
+      keys.map(function (k) {
+        var a = obj(agents[k]), m = a.model || modelFor(j, k);
+        if (a.exact === false) inexact = true;
+        var cost = num(a.usd) !== null && (a.priced !== false || a.usd) ? a.usd : num(by[k]);
+        return '<tr><th scope="row">' + esc(agentLabel(k)) + (m ? '<span class="mute small">' + esc(m) + '</span>' : '') + '</th>' +
+          '<td class="num mono">' + esc(num(a.runs) !== null ? String(a.runs) : '—') + '</td>' +
+          '<td class="num mono"' + (num(a.tokens) ? ' title="' + esc(a.tokens.toLocaleString()) + '"' : '') + '>' + esc(num(a.tokens) ? fmtTok(a.tokens) + (a.exact === false ? '*' : '') : '—') + '</td>' +
+          '<td class="num mono">' + esc(a.priced === false && !a.usd ? '—' : fmtCost(cost)) + '</td></tr>';
+      }).join('') + '</tbody></table>';
+    if (inexact) h += '<div class="small mute">* Older run: the tool\'s count left out cached input, so it is lower than the real usage.</div>';
+  }
+  if (noPrice || unpriced.length) {
+    h += '<div class="small" style="color:var(--warn-ink)">No price set for <span class="mono">' + esc(unpriced.join(', ')) + '</span>. ' +
+      '<a href="#/settings/general">Add it in Settings → General → Prices</a> to see the cost (from your provider\'s price page).</div>';
+  } else if (c.partial) {
+    h += '<div class="small" style="color:var(--warn-ink)">Partial: some runs didn\'t report their usage, so the cost is a lower bound.</div>';
+  }
+  h += '<div class="small mute">Counted from what the agent tool reports' + (arr(c.live).length ? ', updated every few seconds' : '') + '. API-equivalent price, not your bill.</div>';
   return h;
 }
 
@@ -2462,7 +2605,7 @@ function settingsHTML() {
   if (!app.state) body = '<p class="mute" role="status">' + (app.stateErr ? esc(app.stateErr) : 'Loading settings…') + '</p>';
   else if (!app.draft) body = '<div class="errors" role="alert">serve.py did not return a readable config.json. Fix the file by hand, then reload this page.</div>';
   else body = '<div id="cfg-banner">' + (app.state.config_dirty ? configBannerHTML() : '') + '</div>' +
-    '<div id="sec-body" class="stack" style="gap:20px">' + sectionHTML(sec) + '</div>' +
+    '<div id="sec-body" class="secgrid">' + sectionHTML(sec) + '</div>' +
     '<div id="save-errors"></div>' + savebarHTML();
   return '<div class="wrap settings">' + nav + '<main class="settings-main">' + body + '</main></div>';
 }
@@ -2482,8 +2625,9 @@ function sectionHTML(sec) {
 function intro(title, text) {
   return '<div class="intro"><h1>' + esc(title) + '</h1>' + (text ? '<p>' + text + '</p>' : '') + '</div>';
 }
+var WIDE_GROUPS = ['h-steps', 'h-prices', 'h-norunner'];
 function group(id, title, body, action, foot) {
-  return '<section class="sgroup" aria-labelledby="' + id + '"><div class="sgroup-h"><h2 id="' + id + '">' + title + '</h2>' + (action || '') + '</div>' +
+  return '<section class="sgroup' + (WIDE_GROUPS.indexOf(id) >= 0 ? ' wide' : '') + '" aria-labelledby="' + id + '"><div class="sgroup-h"><h2 id="' + id + '">' + title + '</h2>' + (action || '') + '</div>' +
     body + (foot ? '<div class="sgroup-f">' + foot + '</div>' : '') + '</section>';
 }
 function srow(forId, label, help, control) {
@@ -2817,7 +2961,76 @@ function generalSection() {
     textRow('max_rounds', 'Rounds per job', 'Implement → gate → review passes before it asks you. 1 to 5.', { input: 'number', type: 'int', min: 1, max: 5, step: 1, short: true }) +
     moneyRow('cost_caps_usd.job', 'Cost cap per job', 'A job that reaches it stops and goes to you. Empty = no cap.') +
     moneyRow('cost_caps_usd.run', 'Spend cap per 24 hours', 'No new job starts once jobs started in the last 24 hours reach it. Empty = no cap.'));
+  h += pricesGroup();
   return h;
+}
+
+/* --- prices: model names can hold dots, so rows are read back whole instead of bound by path --- */
+
+function seenUnpriced() {
+  var out = [];
+  arr(app.state && app.state.jobs).forEach(function (j) { out = out.concat(arr(obj(j.cost).unpriced)); });
+  var have = obj(app.draft && app.draft.prices_usd_per_mtok);
+  return uniq(out).filter(function (m) { return m && !have[m]; });
+}
+function priceRowHTML(model, p) {
+  p = obj(p);
+  var who = model || 'the new model';
+  function cell(key, label, ph) {
+    var v = p[key];
+    return '<label class="pcell"><span class="plbl">' + label + '</span><span class="pmoney"><span class="mute" aria-hidden="true">$</span>' +
+      '<input class="field mono" type="number" min="0" step="any" inputmode="decimal" data-price="' + key + '" value="' + esc(v === undefined || v === null ? '' : v) +
+      '" placeholder="' + ph + '" aria-label="' + esc(label + ' price for ' + who + ', USD per million tokens') + '"></span></label>';
+  }
+  return '<div class="prow" data-price-row="1" role="listitem">' +
+    '<label class="pcell pmodel"><span class="plbl">Model</span><input class="field mono" type="text" data-price="model" value="' + esc(model) +
+      '" placeholder="e.g. deepseek-flash" spellcheck="false" autocomplete="off" aria-label="Model name"></label>' +
+    cell('input', 'Input', '0.00') + cell('cache_read', 'Cached input', 'as input') + cell('output', 'Output', '0.00') +
+    '<button type="button" class="icon-btn prm" data-action="remove-price" aria-label="Remove the price for ' + esc(who) + '">✕</button></div>';
+}
+function pricesGroup() {
+  var prices = obj(app.draft.prices_usd_per_mtok), names = Object.keys(prices);
+  var seen = seenUnpriced();
+  var hint = seen.length ? '<div class="phint"><span class="small mute">Used on jobs without a price:</span>' + seen.map(function (m) {
+    return '<button type="button" class="btn btn-sm" data-action="add-price" data-model="' + esc(m) + '"><span aria-hidden="true">+</span> <span class="mono">' + esc(m) + '</span></button>';
+  }).join('') + '</div>' : '';
+  var add = '<button type="button" class="btn btn-sm btn-primary" id="btn-add-price" data-action="add-price">+ Add price</button>';
+  return group('h-prices', 'Prices <span class="count">' + names.length + '</span>',
+    '<div class="srow single"><p class="help">USD per <b>million</b> tokens, from your provider\'s price page. The job page works out each agent\'s cost from the tokens the tool reports; leave Cached input empty when your provider has no cache discount. Claude Code reports its own cost, so its models need no price. Use the model name the job page shows.</p>' + hint + '</div>' +
+    '<div class="prices">' +
+      '<div class="prow head" aria-hidden="true"><span>Model</span><span>Input</span><span>Cached input</span><span>Output</span><span></span></div>' +
+      '<div id="price-rows" role="list" aria-label="Prices per model">' + names.map(function (n) { return priceRowHTML(n, prices[n]); }).join('') + '</div>' +
+      '<p class="pempty">No prices yet. Without one, a job shows its tokens but not what they cost.</p>' +
+    '</div>', add, 'A row is saved once it has a model, an input and an output price.');
+}
+function readPrices() {
+  var old = obj(app.draft.prices_usd_per_mtok), out = {};
+  document.querySelectorAll('#price-rows [data-price-row]').forEach(function (row) {
+    var get = function (k) { var el = row.querySelector('[data-price="' + k + '"]'); return el ? str(el.value).trim() : ''; };
+    var model = get('model');
+    if (!model) return;
+    var p = {};
+    Object.keys(obj(old[model])).forEach(function (k) { p[k] = old[model][k]; });  /* keeps cache_write_* set in config.json */
+    ['input', 'cache_read', 'output'].forEach(function (k) {
+      var s = get(k), v = s === '' ? null : Number(s);
+      var el = row.querySelector('[data-price="' + k + '"]');
+      if (s !== '' && (!isFinite(v) || v < 0)) { el.setAttribute('aria-invalid', 'true'); return; }
+      el.removeAttribute('aria-invalid');
+      if (v === null) delete p[k]; else p[k] = v;
+    });
+    if (num(p.input) === null || num(p.output) === null) return;  /* saved once input and output are both set */
+    out[model] = p;
+  });
+  app.draft.prices_usd_per_mtok = out;
+  afterEdit();
+}
+function addPrice(model) {
+  var rows = $('price-rows');
+  if (!rows) return;
+  rows.insertAdjacentHTML('beforeend', priceRowHTML(model || '', {}));
+  var last = rows.lastElementChild, f = last && last.querySelector(model ? '[data-price="input"]' : '[data-price="model"]');
+  if (model) readPrices();
+  if (f) f.focus();
 }
 
 /* --- save bar --- */
@@ -2958,6 +3171,13 @@ function onAction(action, el, ev) {
     case 'toggle-theme': toggleTheme(); break;
     case 'show-finished': app.finishedAll = true; renderView(); break;
     case 'set-view': setBoardView(el.getAttribute('data-view')); break;
+    case 'steps-open':
+      var want = el.getAttribute('data-open') === '1';
+      document.querySelectorAll('#jd-steps details.tl-fold[data-keep]').forEach(function (d) {
+        app.keep[keepKey(d.getAttribute('data-keep'))] = want;
+        d.open = want;
+      });
+      break;
     case 'log-jump': logJump(el.getAttribute('data-line')); break;
     case 'log-errors': logErrorsOnly(el); break;
     case 'viewer-mode':
@@ -3004,6 +3224,19 @@ function onAction(action, el, ev) {
       if (mb) mb.focus();
       break;
     case 'add-harness': addHarness(); break;
+    case 'add-price':
+      addPrice(el.getAttribute('data-model') || '');
+      if (el.getAttribute('data-model')) {
+        var hintRow = el.closest('.phint');
+        el.remove();
+        if (hintRow && !hintRow.querySelector('[data-action="add-price"]')) hintRow.remove();
+      }
+      break;
+    case 'remove-price':
+      var prow = el.closest('[data-price-row]');
+      if (prow) { prow.remove(); readPrices(); }
+      var ab = $('btn-add-price'); if (ab) ab.focus();
+      break;
     case 'remove-harness': removeHarness(el.getAttribute('data-name')); break;
     case 'setup-runner':
       app.draft.runner = clone(DEFAULT_RUNNER);
@@ -3197,9 +3430,18 @@ document.addEventListener('click', function (ev) {
 });
 document.addEventListener('input', function (ev) {
   var el = ev.target;
+  if (el && el.getAttribute && el.getAttribute('data-price')) { readPrices(); return; }
   if (!el || !el.getAttribute || !el.getAttribute('data-bind')) return;
   if (el.type === 'checkbox') return;
   applyBind(el);
+});
+/* Remember folds the user opens or closes (a click on the summary; keyboard Enter/Space also clicks it),
+   so the job page's refresh keeps them as they are. Defaults are left alone until the user acts. */
+document.addEventListener('click', function (ev) {
+  var sum = ev.target && ev.target.closest ? ev.target.closest('summary') : null;
+  var d = sum && sum.parentElement;
+  if (!d || d.tagName !== 'DETAILS' || !d.getAttribute('data-keep') || sum !== d.querySelector('summary')) return;
+  app.keep[keepKey(d.getAttribute('data-keep'))] = !d.open;  /* the state after this click */
 });
 document.addEventListener('change', function (ev) {
   var el = ev.target;

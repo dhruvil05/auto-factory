@@ -107,7 +107,13 @@ in `factory/archive/prompts-<time>/` first).
   UI work then gets the UI reviewer only, not the UX reviewer too: one agent
   run less per round. Security, data and access reviewers always stay, and
   high risk always gets every reviewer.
-- **Token counts** per agent run (Claude Code and Codex) on the job page.
+- **Exact tokens and cost, live:** the job page's Cost card shows input, cached
+  share and output, with runs, tokens and cost per agent. It updates every few
+  seconds while an agent works. Claude Code reports its own usage and cost.
+  For Codex the runner reads Codex's session files, which include the cached
+  input its "tokens used" line leaves out. Add each model's price per million
+  tokens in Settings, General, Prices to see the cost of tools that don't
+  report one.
 
 ## Run it
 
@@ -216,6 +222,18 @@ python factory/bin/serve.py
 Open the printed link (it carries a private token). Settings saved there are
 written to `factory/config.json`; commit that file so everyone running the
 factory shares them.
+
+- **Full width, any screen:** the pages use the whole window on large screens.
+  Settings cards sit two per row from 1600px, and every page works at phone
+  width.
+- **Steps fold:** on a job's page each step of "What happened" opens and
+  closes, with a one-line preview when closed. Failures, warnings and the
+  latest step start open. Expand all and Collapse all are next to the
+  heading, and what you open or close stays that way while the page refreshes.
+- **Restart after an upgrade:** the page is read fresh on every request, but
+  `serve.py`'s own Python isn't. When the factory is upgraded under a running
+  `serve.py`, a bar at the top asks you to restart it: Ctrl+C, run it again,
+  and open the new link.
 
 ## Safety
 

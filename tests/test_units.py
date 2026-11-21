@@ -192,6 +192,62 @@ class RouteTest(unittest.TestCase):
             route.plan(cfg(), {"risk": "low", "surfaces": ["blockchain"]})
 
 
+class UsageTest(unittest.TestCase):
+    def session(self, home, name, opening, totals):
+        import time as _t
+        d = Path(home) / "sessions" / _t.strftime("%Y/%m/%d")
+        d.mkdir(parents=True, exist_ok=True)
+        f = d / name
+        lines = [{"type": "turn_context", "payload": {"model": "m-1"}},
+                 {"type": "event_msg", "payload": {"type": "item_completed", "item": {"type": "UserMessage", "text": opening}}},
+                 {"type": "response_item", "payload": {"type": "function_call", "arguments": "reads Job: 999-other. Role: x."}}]
+        lines += [{"type": "event_msg", "payload": {"type": "token_count", "info": {"total_token_usage": t}}} for t in totals]
+        f.write_text("\n".join(json.dumps(x) for x in lines) + "\n", encoding="utf-8")
+        return f
+
+    def test_codex_session_usage_and_matching(self):
+        import time as _t
+        from factorylib import usage
+        with tempfile.TemporaryDirectory() as home:
+            os.environ["CODEX_HOME"] = home
+            try:
+                stamp = _t.strftime("%Y-%m-%dT%H-%M-%S")
+                sid = "01a1f7f4-c054-7a33-8a7f-eced99e1b508"
+                f = self.session(home, f"rollout-{stamp}-{sid}.jsonl", "Job: 001-a. Role: implementer.", [
+                    {"input_tokens": 10, "cached_input_tokens": 5, "output_tokens": 1},
+                    {"input_tokens": 300, "cached_input_tokens": 200, "output_tokens": 20}])
+                self.assertEqual(usage.codex_usage(f), {"input": 300, "cached": 200, "cache_write": 0, "output": 20,
+                                                        "model": "m-1"})          # the last running total
+                self.assertEqual(usage.session_from_output(f"x\nsession id: {sid}\ny"), f)
+                since = usage.started_at(f)
+                both = (("Job: 001-a.",), ("Role: implementer.",))
+                self.assertEqual(usage.find_codex_session(since=since, needles=both), f)
+                # text after the task (a tool reading another job's files) doesn't make it that job's run
+                self.assertIsNone(usage.find_codex_session(since=since, needles=(("Job: 999-other.",),)))
+                self.assertIsNone(usage.find_codex_session(since=since + 10, needles=both))  # started before this run
+            finally:
+                os.environ.pop("CODEX_HOME", None)
+
+    def test_claude_usage_and_prices(self):
+        from factorylib import usage
+        out = json.dumps({"type": "result", "usage": {"input_tokens": 100, "cache_creation_input_tokens": 50,
+                                                      "cache_read_input_tokens": 850, "output_tokens": 40},
+                          "modelUsage": {"claude-opus-5-5": {}}})
+        u = usage.claude_usage("noise\n" + out)
+        self.assertEqual(u, {"input": 1000, "cached": 850, "cache_write": 50, "output": 40, "model": "claude-opus-5-5"})
+        self.assertEqual(usage.total(u), 1040)
+        # cache prices default to the input price
+        self.assertAlmostEqual(usage.cost_of(u, {"input": 1.0, "output": 10.0}), (1000 + 400) / 1e6)
+        self.assertAlmostEqual(usage.cost_of(u, {"input": 1.0, "output": 10.0, "cache_read": 0.1, "cache_write_5m": 2.0}),
+                               (100 + 85 + 100 + 400) / 1e6)
+        self.assertEqual(usage.price_for({"claude-opus-5-5": 1}, "claude-opus-5-5-20261101"), 1)
+        self.assertIsNone(usage.price_for({"a": 1}, None))
+        c = cfg(prices_usd_per_mtok={"deepseek-flash": {"input": 0.3, "output": 1.2}})
+        self.assertEqual(config.validate(c), [])
+        c = cfg(prices_usd_per_mtok={"deepseek-flash": {"input": 0.3}})
+        self.assertTrue(any("needs input and output" in e for e in config.validate(c)))
+
+
 class CostTest(unittest.TestCase):
     def test_cost_by_agent_and_partial(self):
         from factorylib import cost, paths
@@ -212,7 +268,8 @@ class CostTest(unittest.TestCase):
                 prices = {"claude-opus-5-5": {"input": 2.0, "output": 10.0, "cache_write_5m": 2.5,
                                               "cache_write_1h": 4.0, "cache_read": 0.2}}
                 result = cost.job_cost("007-x", prices)
-                self.assertEqual(result, {"usd": 2.0, "by_agent": {"implementer": 2.0}, "partial": True})
+                self.assertEqual({k: result[k] for k in ("usd", "by_agent", "partial")},
+                                 {"usd": 2.0, "by_agent": {"implementer": 2.0}, "partial": True})
                 self.assertEqual(cost.job_cost("009-none", prices)["usd"], 0.0)
                 slug = "".join(ch if ch.isalnum() else "-" for ch in str(paths.REPO))
                 self.assertEqual(cost.transcripts_dir(), Path(d) / "projects" / slug)

@@ -149,6 +149,18 @@ class ServeTest(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertFalse(data["runner"]["running"])
         self.assertFalse(self.call("/api/state")[1]["runner"]["running"])
+        # an upgrade while serve.py runs: the page says to restart it (its Python is the old code)
+        self.assertFalse(self.call("/api/state")[1]["server_outdated"])
+        import os
+        import time
+        lib = self.sb.repo / "factory" / "factorylib" / "files.py"
+        before = lib.stat()
+        os.utime(lib, (time.time() + 60, time.time() + 60))
+        try:
+            self.assertTrue(self.call("/api/state")[1]["server_outdated"])
+        finally:
+            os.utime(lib, ns=(before.st_atime_ns, before.st_mtime_ns))
+        self.assertFalse(self.call("/api/state")[1]["server_outdated"])
         img = self.sb.jobdir(self.job_id) / "attachments" / "image-1.jpg"
         img.parent.mkdir(parents=True, exist_ok=True)
         img.write_bytes(b"\xff\xd8\xff\xe0fake jpeg")

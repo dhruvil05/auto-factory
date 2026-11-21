@@ -273,10 +273,16 @@ def validate(cfg):
     if not isinstance(prices, dict):
         e.append("prices_usd_per_mtok must be an object")
     else:
+        def price_ok(v):
+            return isinstance(v, (int, float)) and not isinstance(v, bool) and v >= 0
+
         for model, p in prices.items():
-            keys = ("input", "output", "cache_write_5m", "cache_write_1h", "cache_read")
-            if not isinstance(p, dict) or any(not isinstance(p.get(k), (int, float)) or p.get(k) < 0 for k in keys):
-                e.append(f"prices_usd_per_mtok.{model} needs {', '.join(keys)} as numbers")
+            if not isinstance(model, str) or not model.strip():
+                e.append("prices_usd_per_mtok: every price needs a model name")
+            if not isinstance(p, dict) or not all(price_ok(p.get(k)) for k in ("input", "output")):
+                e.append(f"prices_usd_per_mtok.{model} needs input and output as numbers (USD per million tokens)")
+            elif any(k in p and not price_ok(p[k]) for k in ("cache_read", "cache_write_5m", "cache_write_1h")):
+                e.append(f"prices_usd_per_mtok.{model}: cache prices must be numbers (or left out: the input price)")
     _validate_runner(e, cfg.get("runner"))
     return e
 
@@ -317,6 +323,8 @@ def _validate_runner(e, runner):
         if not isinstance(models, dict) or any(k not in MODELS or not isinstance(v, str) or not v.strip()
                                                for k, v in models.items()):
             e.append(f"{where}.models must map {', '.join(MODELS)} to model names")
+        if h.get("usage", "auto") not in ("auto", "codex", "none"):
+            e.append(f"{where}.usage must be auto, codex or none")
         if not isinstance(h.get("verified", False), bool):
             e.append(f"{where}.verified must be true or false")
     if runner.get("harness") not in hs:

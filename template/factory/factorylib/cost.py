@@ -10,9 +10,11 @@ documented interface, so anything unexpected makes the cost partial, never an er
 import json
 import os
 import re
+import time
 from pathlib import Path
 
-from . import paths
+from . import paths, usage
+from .files import atomic_write
 
 
 def transcripts_dir():
@@ -28,38 +30,125 @@ def _prompt(line):
 
 
 def _price(prices, model):
-    if model in prices:
-        return prices[model]
-    for key, p in prices.items():  # "claude-opus-5-5" also prices "claude-opus-5-5-20261101"
-        if model.startswith(key):
-            return p
-    return None
+    return usage.price_for(prices, model)
 
 
-def runner_costs(job_id):
-    """Costs the runner recorded per agent call (runs/*.json), for tools that report one."""
-    total, by_agent, partial = 0.0, {}, False
+LIVE_FRESH = 30  # seconds: a .live file the runner stopped rewriting is left over, not running
+
+
+def _backfill(rec_file, rec):
+    """Records written before the runner kept exact usage: read it from the Codex session the
+    log names, once, and save it in the record (None when there is none)."""
+    if "usage" in rec or rec.get("harness") is None:
+        return rec.get("usage")
+    found = None
+    try:
+        log = paths.job_dir(rec_file.parent.parent.name) / (rec.get("log") or "")
+        if log.is_file():
+            with log.open(encoding="utf-8", errors="replace") as f:
+                session = usage.session_from_output(f.read(8192))
+            found = usage.codex_usage(session) if session else None
+    except OSError:
+        found = None
+    rec["usage"] = found
+    if found:
+        rec["tokens"] = usage.total(found)
+    try:
+        atomic_write(rec_file, json.dumps(rec, indent=2) + "\n")
+    except OSError:
+        pass
+    return found
+
+
+def runner_summary(job_id, prices):
+    """Tokens and cost of the agents the runner started (runs/*.json), plus the ones running now
+    (runs/*.live). Cost comes from the tool when it reports one (Claude Code), else from the
+    tokens and Settings → Prices."""
     runs = paths.job_dir(job_id) / "runs"
+    agents, live, unpriced = {}, [], set()
+    totals = {"input": 0, "cached": 0, "output": 0, "total": 0}
+    usd, partial, count = 0.0, False, 0
+    recs = []
     for f in sorted(runs.glob("*.json")) if runs.exists() else []:
         try:
             rec = json.loads(f.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             partial = True
             continue
-        if rec.get("cost_usd") is None:
-            partial = True
+        if isinstance(rec, dict) and rec.get("role"):
+            recs.append((f.stem, rec, _backfill(f, rec), False))
+    done = {stem for stem, *_ in recs}
+    now = time.time()
+    for f in sorted(runs.glob("*.live")) if runs.exists() else []:
+        try:
+            if f.stem in done or now - f.stat().st_mtime > LIVE_FRESH:
+                continue
+            rec = json.loads(f.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
             continue
-        total += rec["cost_usd"]
-        by_agent[rec.get("role", "agent")] = by_agent.get(rec.get("role", "agent"), 0.0) + rec["cost_usd"]
-    return total, by_agent, partial
+        recs.append((f.stem, rec, rec.get("usage"), True))
+    for stem, rec, u, running in recs:
+        role = rec.get("role", "agent")
+        a = agents.setdefault(role, {"runs": 0, "tokens": 0, "input": 0, "cached": 0, "output": 0,
+                                     "usd": 0.0, "priced": True, "model": None, "exact": True})
+        a["runs"] += 1
+        count += 1
+        model = (u or {}).get("model") or (rec.get("model") if rec.get("model") not in (None, "(tool default)") else None)
+        a["model"] = model or a["model"]
+        if u:
+            tok = usage.total(u)
+            for k in ("input", "cached", "output"):
+                a[k] += u.get(k) or 0
+                totals[k] += u.get(k) or 0
+        else:
+            tok = rec.get("tokens") if isinstance(rec.get("tokens"), int) else 0
+            a["exact"] = a["exact"] and running  # an old count without cached input is too low
+        a["tokens"] += tok
+        totals["total"] += tok
+        cost = rec.get("cost_usd") if isinstance(rec.get("cost_usd"), (int, float)) else None
+        if cost is None and u:
+            p = _price(prices, model)
+            cost = usage.cost_of(u, p) if p else None
+            if p is None:
+                unpriced.add(model or rec.get("harness") or "unknown model")
+        if cost is None:
+            if not running:
+                partial = True
+                a["priced"] = False
+        else:
+            usd += cost
+            a["usd"] += cost
+        if running:
+            live.append({"role": role, "started": rec.get("started"), "tokens": tok,
+                         "usd": round(cost, 4) if cost is not None else None, "model": model})
+    for a in agents.values():
+        a["usd"] = round(a["usd"], 4)
+    return {"usd": usd, "partial": partial, "runs": count, "agents": agents, "tokens": totals,
+            "live": live, "unpriced": sorted(unpriced)}
 
 
-def job_cost(job_id, prices):
+def runner_costs(job_id, prices=None):
+    """(total, {role: usd}, partial) for the runner's agent calls."""
+    s = runner_summary(job_id, prices or {})
+    return s["usd"], {r: a["usd"] for r, a in s["agents"].items() if a["priced"] or a["usd"]}, s["partial"]
+
+
+def _result(total, by_agent, partial, summary):
+    return {"usd": round(total, 2), "by_agent": {k: round(v, 2) for k, v in by_agent.items()}, "partial": partial,
+            "exact_usd": round(total, 4), "tokens": summary["tokens"], "agents": summary["agents"],
+            "live": summary["live"], "unpriced": summary["unpriced"]}
+
+
+def job_cost(job_id, prices, transcripts=True):
+    """The job's cost and tokens. transcripts=False skips Claude Code's transcripts (the /factory
+    skill's agents): cheap enough for the dashboard to call every few seconds."""
     needle = f"Job: {job_id}."
-    total, by_agent, partial = runner_costs(job_id)
+    summary = runner_summary(job_id, prices)
+    total, partial = summary["usd"], summary["partial"]
+    by_agent = {r: a["usd"] for r, a in summary["agents"].items() if a["priced"] or a["usd"]}
     root = transcripts_dir()
-    if not root.exists():
-        return {"usd": round(total, 2), "by_agent": {k: round(v, 2) for k, v in by_agent.items()}, "partial": partial}
+    if not transcripts or not root.exists():
+        return _result(total, by_agent, partial, summary)
     for path in root.glob("*/subagents/agent-*.jsonl"):
         try:
             with path.open(encoding="utf-8", errors="replace") as f:
@@ -86,8 +175,8 @@ def job_cost(job_id, prices):
             write_1h = (u.get("cache_creation") or {}).get("ephemeral_1h_input_tokens", 0)
             write_5m = u.get("cache_creation_input_tokens", 0) - write_1h
             cost += (u.get("input_tokens", 0) * p["input"] + u.get("output_tokens", 0) * p["output"]
-                     + write_5m * p["cache_write_5m"] + write_1h * p["cache_write_1h"]
-                     + u.get("cache_read_input_tokens", 0) * p["cache_read"]) / 1e6
+                     + write_5m * p.get("cache_write_5m", p["input"]) + write_1h * p.get("cache_write_1h", p["input"])
+                     + u.get("cache_read_input_tokens", 0) * p.get("cache_read", p["input"])) / 1e6
         total += cost
         by_agent[agent] = round(by_agent.get(agent, 0.0) + cost, 4)
-    return {"usd": round(total, 2), "by_agent": {k: round(v, 2) for k, v in by_agent.items()}, "partial": partial}
+    return _result(total, by_agent, partial, summary)

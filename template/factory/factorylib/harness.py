@@ -16,7 +16,7 @@ import shutil
 import threading
 import time
 
-from . import jobs, paths
+from . import jobs, paths, usage
 from .files import atomic_write
 from .proc import run_command
 
@@ -233,6 +233,49 @@ def failure_summary(out, code):
     return f"exited {code}"
 
 
+def reads_codex_sessions(h):
+    """Codex keeps exact token counts in its session files; other tools don't have them."""
+    kind = h.get("usage", "auto")
+    if kind in ("codex", "none"):
+        return kind == "codex"
+    return re.sub(r"\.exe$", "", paths.Path(binary(h["cmd"])).name.lower()) == "codex"
+
+
+class LiveUsage(threading.Thread):
+    """While an agent runs, rewrites runs/NNN-role.live every few seconds: what is running,
+    and its tokens so far when the tool keeps them on disk (Codex). The dashboard shows it."""
+
+    def __init__(self, file, base, needles=None, every=5):
+        super().__init__(daemon=True)
+        self.file, self.base, self.needles, self.every = file, base, needles, every
+        self.since, self.session, self.usage = time.time(), None, None
+        self.done = threading.Event()
+
+    def beat(self):
+        if self.needles:
+            try:
+                if not self.session:
+                    self.session = usage.find_codex_session(since=self.since, needles=self.needles)
+                if self.session:
+                    self.usage = usage.codex_usage(self.session) or self.usage
+            except OSError:
+                pass
+        try:
+            atomic_write(self.file, json.dumps({**self.base, "usage": self.usage, "beat": jobs.now()}) + "\n")
+        except OSError:
+            pass  # best effort, like the runner's heartbeat
+
+    def run(self):
+        self.beat()
+        while not self.done.wait(self.every):
+            self.beat()
+
+    def finish(self):
+        self.done.set()
+        self.join(timeout=10)
+        self.file.unlink(missing_ok=True)
+
+
 def _next_index(runs):
     with _counter_lock:
         runs.mkdir(parents=True, exist_ok=True)
@@ -270,11 +313,27 @@ def run_agent(cfg, job, role, task, model_tier, port=None, role_for_port=None, s
         env["PATH"] = path
     started = jobs.now()
     t0 = time.monotonic()
-    code, out, _, timed_out = run_command(command, paths.REPO, cfg["shell"],
-                                          cfg["runner"]["agent_timeout_minutes"] * 60, env,
-                                          input_text=prompt if h["prompt"] == "stdin" else None,
-                                          should_stop=stop_check if should_stop else None)
+    codex = reads_codex_sessions(h)
+    # a run's session starts with its prompt (stdin) or the prompt file's path (file mode)
+    file_named = f"{job['id']}/runs/{stem}.prompt.md"
+    needles = ((f"Job: {job['id']}.", file_named), (f"Role: {role}.", file_named)) if codex else None
+    live = LiveUsage(runs / f"{stem}.live", {"role": role, "harness": name, "model": model or "(tool default)",
+                                             "started": started}, needles)
+    live.start()
+    try:
+        code, out, _, timed_out = run_command(command, paths.REPO, cfg["shell"],
+                                              cfg["runner"]["agent_timeout_minutes"] * 60, env,
+                                              input_text=prompt if h["prompt"] == "stdin" else None,
+                                              should_stop=stop_check if should_stop else None)
+    finally:
+        live.finish()
     reply, cost, err = parse_output(h["output"], out)
+    used = None
+    if h["output"] == "claude-json":
+        used = usage.claude_usage(out)
+    elif codex:
+        session = usage.session_from_output(out) or live.session
+        used = (usage.codex_usage(session) if session else None) or live.usage
     if ended:
         reply, err = "", None
     elif code != 0 and not err and h["output"] == "text":
@@ -283,7 +342,8 @@ def run_agent(cfg, job, role, task, model_tier, port=None, role_for_port=None, s
     record = {
         "role": role, "harness": name, "model": model or "(tool default)", "task": task,
         "started": started, "seconds": round(time.monotonic() - t0, 1), "exit": code,
-        "timed_out": timed_out, "stopped": bool(ended), "cost_usd": cost, "tokens": token_count(h["output"], out),
+        "timed_out": timed_out, "stopped": bool(ended), "cost_usd": cost,
+        "tokens": usage.total(used) if used else token_count(h["output"], out), "usage": used,
         "reply": reply, "error": err, "log": f"runs/{stem}.log",
     }
     note = "\n\n[auto-factory: stopped from the dashboard; the step runs again on resume]\n" if ended else ""

@@ -68,6 +68,75 @@ class RunnerTest(unittest.TestCase):
         self.assertIsNone(self.runs(job["id"])[0]["tokens"])  # the fake tool reports no usage
         self.assertNotIn("hooks:", prompt)              # frontmatter is stripped
 
+    def codex_like(self, prompt="stdin", **plan):
+        """The fake agent as Codex: text output and exact usage in a session file only."""
+        self.make(plan={"1": plan} if plan else None, prompt=prompt, auto_merge=True)
+        cfg = self.sb.config()
+        cfg["runner"]["harnesses"]["fake"]["output"] = "text"
+        cfg["runner"]["harnesses"]["fake"]["usage"] = "codex"
+        cfg["prices_usd_per_mtok"] = {"fake-flash": {"input": 1.0, "cache_read": 0.1, "output": 2.0}}
+        self.sb.write_config(cfg)
+        home = self.sb.tmp / "codex-home"
+        self.sb.env["CODEX_HOME"] = self.sb.env["FAKE_CODEX_HOME"] = str(home)
+
+    def test_codex_usage_and_cost_from_its_session_files(self):
+        self.codex_like()
+        self.sb.add_issue(1, "Tiny change")
+        self.run_factory()
+        job = self.sb.jobjson("001-tiny-change")
+        self.assertEqual(job["stage"], "merged")
+        rec = self.runs(job["id"])[0]
+        # exact usage, cached input included, not Codex's "tokens used" line (5,000)
+        self.assertEqual(rec["usage"], {"input": 20000, "cached": 16000, "cache_write": 0, "output": 1000,
+                                        "model": "fake-flash"})
+        self.assertEqual(rec["tokens"], 21000)
+        c = job["cost"]
+        self.assertEqual(c["tokens"], {"input": 100000, "cached": 80000, "output": 5000, "total": 105000})
+        # 4,000 fresh × $1 + 16,000 cached × $0.10 + 1,000 out × $2 per million = $0.0076 a run
+        self.assertAlmostEqual(c["exact_usd"], 0.038, places=4)
+        self.assertFalse(c["partial"])
+        self.assertEqual(c["agents"]["implementer"]["model"], "fake-flash")
+        self.assertEqual(c["agents"]["implementer"]["runs"], 1)
+        self.assertEqual(c["unpriced"], [])
+        self.assertFalse(list((self.sb.jobdir(job["id"]) / "runs").glob("*.live")))  # cleaned up
+
+    def test_codex_usage_live_while_a_step_runs(self):
+        import subprocess
+        import time
+        self.codex_like(prompt="file", sleep_once={"implementer": 12})
+        cfg = self.sb.config()
+        cfg["prices_usd_per_mtok"] = {}
+        self.sb.write_config(cfg)
+        self.sb.add_issue(1, "Slow change")
+        proc = subprocess.Popen([PY, str(self.sb.repo / "factory" / "bin" / "run.py"), "1"], cwd=str(self.sb.repo),
+                                env=self.sb.env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        try:
+            runs = self.sb.jobdir("001-slow-change") / "runs"
+            seen = None
+            deadline = time.monotonic() + 60
+            while time.monotonic() < deadline and not seen:
+                for f in runs.glob("*-implementer.live") if runs.exists() else []:
+                    try:
+                        data = json.loads(f.read_text(encoding="utf-8"))
+                    except ValueError:
+                        continue
+                    if data.get("usage"):
+                        seen = data
+                time.sleep(0.3)
+            self.assertIsNotNone(seen, "no live usage while the implementer ran")
+            self.assertEqual(seen["usage"]["input"], 10000)            # the first turn's running total
+            sys_path = str(self.sb.repo / "factory")
+            out = subprocess.run([PY, "-c", "import json,sys; sys.path.insert(0, sys.argv[1]);"
+                                  "from factorylib import cost; print(json.dumps(cost.runner_summary(sys.argv[2], {})))",
+                                  sys_path, "001-slow-change"], cwd=str(self.sb.repo), env=self.sb.env,
+                                 capture_output=True, text=True, check=True).stdout
+            live = json.loads(out)
+            self.assertEqual([r["role"] for r in live["live"]], ["implementer"])
+            self.assertEqual(live["live"][0]["tokens"], 10500)
+            self.assertEqual(live["unpriced"], ["fake-flash"])            # no price: tokens only, said so
+        finally:
+            proc.wait(timeout=120)
+
     def test_auto_merge_and_prompt_file_mode(self):
         self.make(prompt="file", auto_merge=True)
         self.sb.add_issue(1, "Tiny change")

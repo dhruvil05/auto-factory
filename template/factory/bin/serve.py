@@ -26,7 +26,7 @@ from urllib.parse import parse_qs, urlsplit
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from factorylib import config, jobs, paths  # noqa: E402
+from factorylib import config, cost, jobs, paths  # noqa: E402
 from factorylib import runner as runstate  # noqa: E402
 from factorylib.files import first_line, summary_bullets  # noqa: E402
 from factorylib.proc import git  # noqa: E402
@@ -38,6 +38,7 @@ MAX_LOG = 1_000_000
 IMAGE_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp"}
 CONTROL = {"pause": ["pause"], "stop": ["pause", "--now"], "resume": ["unpause"], "retry": ["retry"]}
 DASHBOARD = paths.FACTORY / "dashboard" / "index.html"
+STARTED_CODE = runstate.code_stamp()  # the page is read fresh on every request; this process's Python is not
 CSP = ("default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; "
        "connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
 
@@ -127,6 +128,34 @@ def stopped_reason(job_id):
     return (body.splitlines() or ["stopped"])[0][:300]
 
 
+_cost_cache = {}
+
+
+def live_cost(job, cfg):
+    """The cost and tokens as they are now: job.json's copy is only updated between steps, and
+    prices can change after a job ends. Reads only the runner's records; a finished job's result
+    is reused until its runs folder or the prices change. A job the /factory skill ran (no runner
+    records) keeps its saved cost."""
+    prices = cfg.get("prices_usd_per_mtok") or {}
+    runs = paths.job_dir(job["id"]) / "runs"
+    try:
+        key = (runs.stat().st_mtime_ns, json.dumps(prices, sort_keys=True))
+    except OSError:
+        return
+    running = job.get("stage") in jobs.RUNNING
+    hit = _cost_cache.get(job["id"])
+    if not running and hit and hit[0] == key:
+        now = hit[1]
+    else:
+        try:
+            now = cost.job_cost(job["id"], prices, transcripts=False)
+        except (OSError, ValueError, KeyError, TypeError):
+            return
+        _cost_cache[job["id"]] = (key, now)
+    if now.get("agents"):
+        job["cost"] = now
+
+
 def load_config_raw():
     try:
         return config.load(), []
@@ -140,6 +169,7 @@ def state():
     all_jobs = jobs.all_jobs()
     for j in all_jobs:  # display only
         j["stopped"] = stopped_reason(j["id"]) if j["stage"] in jobs.RUNNING else None
+        live_cost(j, cfg)
     dirty = git(paths.REPO, "status", "--porcelain", "--", "factory/config.json", check=False).stdout.strip()
     return {
         "project": {"name": paths.REPO.name, "repo": paths.posix(paths.REPO), "base_branch": cfg["base_branch"]},
@@ -152,6 +182,7 @@ def state():
                   "total": cfg["concurrency"]},
         "runner": runstate.status(),
         "preflight": Preflight.state()["result"],
+        "server_outdated": runstate.code_stamp() != STARTED_CODE,
     }
 
 
@@ -159,7 +190,7 @@ def job_files(job_id):
     d = paths.job_dir(job_id)
     out = []
     for p in sorted(d.rglob("*")):
-        if not p.is_file() or p.name in (".lock", "job.json") or p.suffix == ".tmp":
+        if not p.is_file() or p.name in (".lock", "job.json") or p.suffix in (".tmp", ".live", ".reserved"):
             continue
         rel = p.relative_to(d).as_posix()
         entry = {"path": rel, "size": p.stat().st_size, "first_line": None, "summary": []}
@@ -260,7 +291,9 @@ class Handler(BaseHTTPRequestHandler):
             if len(parts) == 3 and parts[:2] == ["api", "jobs"]:
                 job_id = self.job_id(parts[2])
                 if job_id:
-                    return self.send(HTTPStatus.OK, {"job": jobs.load(job_id, locked=False), "files": job_files(job_id)})
+                    job = jobs.load(job_id, locked=False)
+                    live_cost(job, load_config_raw()[0])
+                    return self.send(HTTPStatus.OK, {"job": job, "files": job_files(job_id)})
                 return None
             if len(parts) == 4 and parts[:2] == ["api", "jobs"] and parts[3] == "file":
                 job_id = self.job_id(parts[2])

@@ -4,10 +4,13 @@ An issue-driven software factory for any kind of project, run by Claude Code
 or any other agent CLI (Codex, DeepSeek, …). A short project profile tells the
 agents what your project is; starter profiles ship for backoffice, web apps,
 API services, libraries, mobile apps and data pipelines.
-Label a GitHub issue `factory`, run `/factory run`, and agents decide whether
-it's worth building, write a spec, implement it on its own branch, pass it
-through your checks, review it, and open a pull request. The approver merges
-what it's allowed to; everything else waits for you with a specific question.
+Label a GitHub issue `factory`, press **Start** in the dashboard (or run
+`/factory run`), and agents decide whether it's worth building, write a spec,
+implement it on its own branch, pass it through your checks, review it, and
+open a pull request. The approver merges what it's allowed to; everything else
+waits for you with a specific question.
+
+![A job's page: each step the agents took, and the tokens and cost per agent](docs/screenshots/job.png)
 
 Built from the design in [PLAN.md](PLAN.md). The interfaces between the pieces
 are fixed in [CONTRACTS.md](CONTRACTS.md).
@@ -45,13 +48,17 @@ template/                      what gets installed
   factory/dashboard/           the dashboard page (served by serve.py)
   factory/config.json          defaults; edited from the dashboard afterwards
 tests/                         unit and end-to-end tests (fake GitHub, real git)
+docs/screenshots/              the dashboard pictures in this README
 PLAN.md  CONTRACTS.md
 ```
 
 ## Requirements
 
-- Python 3.10+ (`python` on PATH), git, Claude Code.
+- Python 3.10+ (`python` on PATH) and git.
+- An agent CLI: Claude Code, Codex, or another tool that runs without prompts
+  (see [Use it with Codex, DeepSeek or another agent tool](#use-it-with-codex-deepseek-or-another-agent-tool)).
 - The GitHub CLI `gh`, logged in with an account that can push and manage labels.
+- Recommended: ripgrep (`rg`). Agents search with it first.
 - Optional: Playwright for Python (`pip install playwright && python -m playwright
   install chromium`) so reviewers can take signed-in screenshots. Without it they
   review from code and say so.
@@ -141,6 +148,9 @@ outside its sandbox. If your Codex session can't keep a long command running,
 press **Start** in the dashboard or run `python factory/bin/run.py --watch` in
 a terminal instead; the result is the same.
 
+The Codex skill only runs when you name it (`allow_implicit_invocation: false`
+in its `agents/openai.yaml`), because it opens and merges pull requests.
+
 ## Keep it running: the runner
 
 You don't have to start the factory again after each piece of feedback. Press
@@ -170,8 +180,6 @@ points at them. Intake, the spec writer, the implementer and the UI/UX
 reviewers are told to open them. Only GitHub-hosted images are fetched (PNG,
 JPEG, GIF, WebP; at most 20, 10 MB each); the dashboard shows them under
 "Images from the issue" on the job page.
-The Codex skill only runs when you name it (`allow_implicit_invocation: false`
-in its `agents/openai.yaml`), because it opens and merges pull requests.
 
 ## Use it with Codex, DeepSeek or another agent tool
 
@@ -183,6 +191,7 @@ python factory/bin/run.py doctor    # check settings and that the tools are inst
 python factory/bin/run.py --watch   # keep working the queue until stopped (or press Start in the dashboard)
 python factory/bin/run.py           # one pass: until nothing can move without you
 python factory/bin/run.py 12        # one issue
+python factory/bin/run.py status    # is a runner on, and what is it doing?
 python factory/bin/run.py stop      # stop a running runner (add --now to end running agents)
 ```
 
@@ -193,7 +202,7 @@ tool per role (say Codex implements, Claude reviews). Presets ship for:
 | Tool | Status |
 |---|---|
 | Claude Code (`claude -p`) | checked against Claude Code 2.1.286; records cost per agent |
-| Codex (`codex exec`) | preset, **not verified here**: compare with `codex exec --help` and set model names |
+| Codex (`codex exec`) | preset; used with Codex 0.170 and DeepSeek models. Exact tokens come from Codex's session files. Compare with your `codex exec --help` and set model names |
 | DeepSeek (`deepseek exec`) | preset, **not verified here**: DeepSeek's terminal agents differ; set the real command |
 
 Any other CLI works if it can run non-interactively, read a prompt from stdin
@@ -223,17 +232,78 @@ Open the printed link (it carries a private token). Settings saved there are
 written to `factory/config.json`; commit that file so everyone running the
 factory shares them.
 
-- **Full width, any screen:** the pages use the whole window on large screens.
-  Settings cards sit two per row from 1600px, and every page works at phone
-  width.
-- **Steps fold:** on a job's page each step of "What happened" opens and
-  closes, with a one-line preview when closed. Failures, warnings and the
-  latest step start open. Expand all and Collapse all are next to the
-  heading, and what you open or close stays that way while the page refreshes.
-- **Restart after an upgrade:** the page is read fresh on every request, but
-  `serve.py`'s own Python isn't. When the factory is upgraded under a running
-  `serve.py`, a bar at the top asks you to restart it: Ctrl+C, run it again,
-  and open the new link.
+### Board
+
+Every job by stage: planning, building, reviewing, waiting for you, done.
+The top bar starts and stops the runner and pauses the whole factory. The
+summary adds up what all jobs spent, in money and tokens.
+
+![The board](docs/screenshots/board.png)
+
+### A job
+
+The progress track, then each step the agents and scripts took, newest at the
+bottom. Each step opens and closes, with a one-line preview when closed.
+Failures, warnings and the latest step start open. **Expand all** and
+**Collapse all** sit next to the heading, and what you open or close stays that
+way while the page refreshes.
+
+The side panel shows who reviews the job and whether it may merge on its own.
+The **Cost** card shows the job's tokens (input, cached share, output) and its
+runs, tokens and cost per agent. While an agent works, a live line shows its
+tokens so far and updates every few seconds. Below the steps are the job's
+files, the runner's records of each agent run, and the images from the issue.
+
+![A job's steps and its Cost card](docs/screenshots/job.png)
+
+### Settings
+
+Everything in `config.json`, in five sections. On wide screens the cards sit two
+per row; lists such as check steps and prices use the full row.
+
+- **Checks:** the gate's check steps, run before review and again before
+  merging, and a button to test them on main.
+
+  ![Settings: check steps](docs/screenshots/settings-checks.png)
+
+- **Review & merge:** the model for each agent and, per risk level, the code
+  reviewer, **Auto-merge** and **Light review**.
+
+  ![Settings: models, auto-merge and light review](docs/screenshots/settings-review.png)
+
+- **Agent tools:** which command-line tool runs the agents, a different tool
+  per agent if you want, and each tool's command and model names.
+
+  ![Settings: agent tools](docs/screenshots/settings-agent-tools.png)
+
+- **General:** git and shell, limits and cost caps, and **Prices**: USD per
+  million tokens for each model, so tools that report only tokens (Codex)
+  get a cost too. Models used on jobs without a price show up as one-click
+  buttons.
+
+  ![Settings: limits and prices](docs/screenshots/settings-prices.png)
+
+### Any screen, light or dark
+
+Pages use the whole window on large screens and work at phone width. The sun
+or moon button in the top bar switches between dark and light.
+
+<p>
+  <img src="docs/screenshots/job-phone.png" alt="A job on a phone" width="260">
+  &nbsp;
+  <img src="docs/screenshots/job-light.png" alt="A job in the light theme" width="560">
+</p>
+
+### After an upgrade, restart `serve.py`
+
+The page is read fresh on every request, but `serve.py`'s own Python isn't.
+When the factory is upgraded under a running `serve.py`, a bar at the top asks
+you to restart it: Ctrl+C, run it again, and open the new link. Until then
+some numbers (and saving new kinds of settings) come from the old code.
+
+The screenshots come from a demo project with three real jobs that Codex ran
+on DeepSeek. Their costs use prices entered in Settings, so check your
+provider's prices for your own.
 
 ## Safety
 
@@ -258,4 +328,5 @@ python -m unittest -v
 
 The end-to-end tests build a throwaway repo with a bare `origin`, install the
 factory, and drive every stage with a fake `gh`; no network or GitHub account
-is needed. About three minutes on Windows.
+is needed. About eight minutes on Windows (the runner tests wait on real
+processes and timers).
